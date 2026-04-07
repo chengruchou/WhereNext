@@ -1,7 +1,8 @@
 <script lang="ts" setup>
   import { ref, onMounted, computed, watch } from "vue"
+  import type { PlaceInfo } from "@/types/place";
   const userId = ref("")
-  const props = defineProps<{ userHistory: number[] | undefined }>()
+  const props = defineProps<{ userHistory: PlaceInfo[] | undefined }>()
 </script>
 
 <template>
@@ -12,8 +13,8 @@
     <v-card-text>
       <v-list>
         <v-list-item v-for="(e, index) in props.userHistory" :key="index">
-          <v-list-item-title> History # {{ index + 1 }} </v-list-item-title>
-          <v-list-item-subtitle> Site ID : {{ e }} </v-list-item-subtitle>
+          <v-list-item-title> # {{ index + 1 }} </v-list-item-title>
+          <v-list-item-subtitle> Site Name : {{ e.name }} </v-list-item-subtitle>
         </v-list-item>
       </v-list>
     </v-card-text>

@@ -1,13 +1,7 @@
 <script lang="ts" setup>
   import { ref, onMounted, computed, watch } from "vue"
-  interface PlaceInfo {
-    name: string
-    lat: number
-    lng: number
-    types: string[]
-    photoUrl: string | null
-  }
-  const props = defineProps<{ place: PlaceInfo | null }>()
+  import type { PlaceInfo } from "@/types/place"
+  const props = defineProps<{ place: PlaceInfo | null; showAdd: Boolean }>()
   const emit = defineEmits<{
     (e: "submit-add-history", payload: { passPlace: PlaceInfo | null }): void
   }>()
@@ -25,7 +19,12 @@
     title="Place Crad"
     variant="outlined"
     color="warning">
-    <v-img v-if="props.place.photoUrl" :src="props.place.photoUrl" height="150" cover />
+    <v-img
+      v-if="props.place.photoUrl"
+      :src="props.place.photoUrl"
+      height="150"
+      cover
+      class="mx-2" />
     <v-card-item>
       <v-card-title>
         {{ props.place.name }}
@@ -44,8 +43,10 @@
         variant="tonal">
         {{ type }}
       </v-chip>
-      <v-divider class="my-2" thickness="4" />
-      <v-btn text="Add to User History" @click="addHistory" block color="warning" />
+      <span v-if="showAdd">
+        <v-divider class="my-2" thickness="4" />
+        <v-btn text="Add to User History" @click="addHistory" block color="warning" />
+      </span>
     </v-card-text>
   </v-card>
 </template>

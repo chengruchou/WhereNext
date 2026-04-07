@@ -6,21 +6,14 @@
   import MapCanvas from "./components/MapCanvas.vue"
   import SearchPanel from "./components/SearchPanel.vue"
   import PlaceCard from "./components/PlaceCard.vue"
-import { ms } from "vuetify/iconsets/ms"
-  interface PlaceInfo {
-    name: string
-    lat: number
-    lng: number
-    types: string[]
-    photoUrl: string | null
-  }
+  import type { PlaceInfo } from "./types/place"
 
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
-  const userHistory = ref<number[]>()
+  const userHistory = ref<PlaceInfo[]>()
   const userId = ref("")
   const showSearch = ref<PlaceInfo | null>(null)
-  const showRecommend = ref<PlaceInfo[]>()
+  const showRecommend = ref<PlaceInfo[]>([])
 
   const fetchUserHistory = async (payload: { passUserId: string }) => {
     try {
@@ -38,7 +31,7 @@ import { ms } from "vuetify/iconsets/ms"
       const place = payload.passPlace
       const msg = (await api.post(`/db/add/${userId.value}`, place)).data
       console.log("add db ", msg)
-      fetchUserHistory({passUserId: userId.value})
+      fetchUserHistory({ passUserId: userId.value })
     } catch (error) {
       alert(error)
     }
@@ -111,6 +104,16 @@ import { ms } from "vuetify/iconsets/ms"
       return null
     }
   }
+
+  const getNextPOI = async () => {
+    try {
+      const res = (await api.get(`/model/genpoi/${userId.value}`)).data
+      console.log("got POI res", res)
+      showRecommend.value = res as PlaceInfo[]
+    } catch (error) {
+      alert(error)
+    }
+  }
 </script>
 
 <template>
@@ -121,10 +124,13 @@ import { ms } from "vuetify/iconsets/ms"
           <UserLogin @submit-user-id="fetchUserHistory" />
           <HistoryList :user-history="userHistory" />
           <SearchPanel @submit-search-place="searchPlaceId" />
-          <PlaceCard :place="showSearch" @submit-add-history="addUserHistory" />
+          <PlaceCard :place="showSearch" :show-add="true" @submit-add-history="addUserHistory" />
         </v-col>
-        <v-col class="d-flex justify-center">
-          <v-btn text="Get next POIs" class="my-4" color="primary" />
+        <v-col class="d-flex flex-column align-center">
+          <v-btn text="Get next POIs" @click="getNextPOI" class="my-4" color="primary" />
+          <span v-for="e in showRecommend" :key="e.name">
+            <PlaceCard :place="e" :show-add="false" />
+          </span>
         </v-col>
       </v-row>
     </v-navigation-drawer>
