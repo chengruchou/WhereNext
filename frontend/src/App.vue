@@ -21,7 +21,7 @@
     }
   }
 
-  const searchPlace = async (payload: { placeName: string }) => {
+  const searchPlaceId = async (payload: { placeName: string }) => {
     const requestBody = {
       textQuery: payload.placeName,
       languageCode: "zh-TW",
@@ -38,7 +38,6 @@
         },
       },
     }
-
     const requestConfig = {
       headers: {
         "Content-Type": "application/json",
@@ -61,14 +60,41 @@
       return null
     }
   }
+
+  const searchPlaceDetail = async (placeId: string) => {
+    const requestBody = {
+      languageCode: "zh-TW",
+    }
+    const requestConfig = {
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "photos,location,types",
+      },
+    }
+    try {
+      const res = (
+        await axios.get(
+          `https://places.googleapis.com/v1/places/${placeId}?languageCode=zh-TW`,
+          requestConfig,
+        )
+      ).data
+      console.log("search id res : ", res)
+      return { lat: res.location.latitude, lng: res.location.longtitude, types: res.types, photo: res.photos[0].name}
+    } catch (error) {
+      console.log(error)
+      return null
+    }
+  }
 </script>
 
 <template>
   <v-app>
     <v-navigation-drawer permanent width="300">
+      <v-btn text="id" @click="searchPlaceDetail('ChIJ9yEOqn13bjQRihUVf4jHLu0')"> </v-btn>
       <UserLogin @submit-user-id="fetchUserHistory" />
       <history-list :user-history="userHistory" />
-      <searchPanel @submit-search-place="searchPlace" />
+      <searchPanel @submit-search-place="searchPlaceId" />
     </v-navigation-drawer>
     <v-main>
       <MapCanvas />
