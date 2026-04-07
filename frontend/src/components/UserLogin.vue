@@ -11,7 +11,7 @@
 </script>
 
 <template>
-  <v-card title="User Login">
+  <v-card title="User Login" variant="outlined" class="ma-4" color="primary">
     <v-card-item title="">
       <v-text-field label="User Id" v-model="userId"> </v-text-field>
     </v-card-item>

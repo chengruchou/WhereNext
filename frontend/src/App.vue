@@ -1,9 +1,10 @@
 <script lang="ts" setup>
   import { ref, onMounted, computed, watch } from "vue"
-  import { GoogleMap, AdvancedMarker } from "vue3-google-map"
   import axios from "axios"
   import UserLogin from "./components/UserLogin.vue"
   import HistoryList from "./components/HistoryList.vue"
+  import MapCanvas from "./components/MapCanvas.vue"
+  import searchPanel from "./components/searchPanel.vue"
 
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
@@ -20,43 +21,44 @@
     }
   }
 
-  const searchPlace = async () => {
+  const searchPlace = async (payload: { placeName: string }) => {
     const requestBody = {
-      textQuery: "小東公園",
+      textQuery: payload.placeName,
       languageCode: "zh-TW",
-      // locationRestriction: {
-      //   rectangle: {
-      //     low: {
-      //       latitude: 40.477398,
-      //       longitude: -74.259087,
-      //     },
-      //     high: {
-      //       latitude: 40.91618,
-      //       longitude: -73.70018,
-      //     },
-      //   },
-      // },
+      locationRestriction: {
+        rectangle: {
+          low: {
+            latitude: 22,
+            longitude: 120,
+          },
+          high: {
+            latitude: 25,
+            longitude: 122,
+          },
+        },
+      },
     }
 
     const requestConfig = {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask":
-          "places.attributions, places.id, places.name, nextPageToken, places.movedPlace, places.movedPlaceId",
+        "X-Goog-FieldMask": "places.id",
       },
     }
     try {
-      let res = (
+      const res = (
         await axios.post(
           "https://places.googleapis.com/v1/places:searchText",
           requestBody,
           requestConfig,
         )
       ).data
-      console.log("search place res : " + res)
+      console.log("search place res : ", res)
+      return res.places
     } catch (error) {
       console.log(error)
+      return null
     }
   }
 </script>
@@ -66,16 +68,10 @@
     <v-navigation-drawer permanent width="300">
       <UserLogin @submit-user-id="fetchUserHistory" />
       <history-list :user-history="userHistory" />
+      <searchPanel @submit-search-place="searchPlace" />
     </v-navigation-drawer>
     <v-main>
-      <GoogleMap
-        :api-key="apiKey"
-        map-id="CenterMap"
-        style="width: 100%; height: 100%"
-        :center="center"
-        :zoom="15">
-        <AdvancedMarker :options="{ position: center, title: '敬業一舍' }" />
-      </GoogleMap>
+      <MapCanvas />
     </v-main>
   </v-app>
 </template>
