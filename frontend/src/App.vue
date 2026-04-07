@@ -4,26 +4,38 @@
   import UserLogin from "./components/UserLogin.vue"
   import HistoryList from "./components/HistoryList.vue"
   import MapCanvas from "./components/MapCanvas.vue"
-  import searchPanel from "./components/searchPanel.vue"
+  import SearchPanel from "./components/SearchPanel.vue"
+  import PlaceCard from "./components/PlaceCard.vue"
+  interface PlaceInfo {
+    name: string
+    lat: number
+    lng: number
+    types: string[]
+    photoUrl: string | null
+  }
 
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
   const userHistory = ref<number[]>()
   const userId = ref("")
   const center = { lat: 23.001121896510238, lng: 120.22314068661719 }
+  const showSearch = ref<PlaceInfo | null>(null)
+  const showRecommend = ref<PlaceInfo[]>()
 
-  const fetchUserHistory = async (payload: { passId: string }) => {
+  const fetchUserHistory = async (payload: { passUserId: string }) => {
     try {
-      userId.value = payload.passId
-      userHistory.value = (await api.get(`/db/fetch/${userId.value}`)).data
+      userId.value = payload.passUserId
+      if (userId.value) {
+        userHistory.value = (await api.get(`/db/fetch/${userId.value}`)).data
+      }
     } catch (error) {
       alert(error)
     }
   }
 
-  const searchPlaceId = async (payload: { placeName: string }) => {
+  const searchPlaceId = async (payload: { passPlaceName: string }) => {
     const requestBody = {
-      textQuery: payload.placeName,
+      textQuery: payload.passPlaceName,
       languageCode: "zh-TW",
       locationRestriction: {
         rectangle: {
@@ -54,33 +66,35 @@
         )
       ).data
       console.log("search place res : ", res)
-      return res.places
+      showSearch.value = await searchPlaceDetail(res.places[0].id)
     } catch (error) {
       console.log(error)
-      return null
     }
   }
 
-  const searchPlaceDetail = async (placeId: string) => {
-    const requestBody = {
-      languageCode: "zh-TW",
-    }
+  const searchPlaceDetail = async (passId: string): Promise<PlaceInfo | null> => {
     const requestConfig = {
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "photos,location,types",
+        "X-Goog-FieldMask": "photos,location,types,displayName",
       },
     }
     try {
       const res = (
         await axios.get(
-          `https://places.googleapis.com/v1/places/${placeId}?languageCode=zh-TW`,
+          `https://places.googleapis.com/v1/places/${passId}?languageCode=zh-TW`,
           requestConfig,
         )
       ).data
       console.log("search id res : ", res)
-      return { lat: res.location.latitude, lng: res.location.longtitude, types: res.types, photo: res.photos[0].name}
+      return {
+        name: res.displayName.text,
+        lat: res.location.latitude,
+        lng: res.location.longitude,
+        types: res.types,
+        photoUrl: `https://places.googleapis.com/v1/${res.photos[0].name}/media?key=${apiKey}&maxHeightPx=400&maxWidthPx=400`,
+      }
     } catch (error) {
       console.log(error)
       return null
@@ -91,10 +105,10 @@
 <template>
   <v-app>
     <v-navigation-drawer permanent width="300">
-      <v-btn text="id" @click="searchPlaceDetail('ChIJ9yEOqn13bjQRihUVf4jHLu0')"> </v-btn>
       <UserLogin @submit-user-id="fetchUserHistory" />
-      <history-list :user-history="userHistory" />
-      <searchPanel @submit-search-place="searchPlaceId" />
+      <HistoryList :user-history="userHistory" />
+      <SearchPanel @submit-search-place="searchPlaceId" />
+      <PlaceCard :place="showSearch" />
     </v-navigation-drawer>
     <v-main>
       <MapCanvas />

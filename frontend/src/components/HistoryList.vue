@@ -1,6 +1,5 @@
 <script lang="ts" setup>
   import { ref, onMounted, computed, watch } from "vue"
-  import axios from "axios"
   const userId = ref("")
   const props = defineProps<{ userHistory: number[] | undefined }>()
 </script>

@@ -13,6 +13,7 @@
   "dependencies": {
     "@fontsource/roboto": "^5.2.10",
     "@mdi/font": "7.4.47",
+    "axios": "^1.14.0",
     "marker": "^0.1.2",
     "vue": "^3.5.30",
     "vue3-google-map": "^0.27.1",
