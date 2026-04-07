@@ -124,18 +124,18 @@
           <UserLogin @submit-user-id="fetchUserHistory" />
           <HistoryList :user-history="userHistory" />
           <SearchPanel @submit-search-place="searchPlaceId" />
-          <PlaceCard :place="showSearch" :show-add="true" @submit-add-history="addUserHistory" />
+          <PlaceCard :place="showSearch" :show-add="true" :index=0 @submit-add-history="addUserHistory" />
         </v-col>
         <v-col class="d-flex flex-column align-center">
           <v-btn text="Get next POIs" @click="getNextPOI" class="my-4" color="primary" />
-          <span v-for="e in showRecommend" :key="e.name">
-            <PlaceCard :place="e" :show-add="false" />
+          <span v-for="(e, index) in showRecommend" :key="e.name">
+            <PlaceCard :place="e" :show-add="false" :index="index"/>
           </span>
         </v-col>
       </v-row>
     </v-navigation-drawer>
     <v-main>
-      <MapCanvas />
+      <MapCanvas :show-recommend="showRecommend" :show-search="showSearch" />
     </v-main>
   </v-app>
 </template>
