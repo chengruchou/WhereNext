@@ -3,7 +3,6 @@ from flask_cors import CORS
 from routes.db_api import db_bp
 from routes.model_api import model_bp
 
-
 app = Flask(__name__)
 CORS(app)
 

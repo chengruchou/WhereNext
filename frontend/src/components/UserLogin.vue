@@ -1,13 +1,13 @@
 <script lang="ts" setup>
-import { ref, onMounted, computed, watch } from "vue";
-import axios from "axios";
-const userId = ref('');
-const emit = defineEmits<{
-  (e: 'submit-userId', payload: { passId: string }): void
-}>()
-watch(userId, () => {
-  emit("submit-userId", {passId: userId.value})
-})
+  import { ref, onMounted, computed, watch } from "vue"
+  import axios from "axios"
+  const userId = ref("")
+  const emit = defineEmits<{
+    (e: "submit-user-id", payload: { passId: string }): void
+  }>()
+  watch(userId, () => {
+    emit("submit-user-id", { passId: userId.value })
+  })
 </script>
 
 <template>
