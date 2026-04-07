@@ -6,14 +6,16 @@
 
 <template>
   <v-card title="User History" variant="outlined" class="mx-4" color="secondary">
-    <v-card-text v-if="!props.userHistory || props.userHistory.length==0">
+    <v-card-text v-if="!props.userHistory || props.userHistory.length == 0">
       No history
     </v-card-text>
-    <v-list>
-      <v-list-item v-for="(e, index) in props.userHistory" :key="index">
-        <v-list-item-title> History # {{ index + 1 }} </v-list-item-title>
-        <v-list-item-subtitle> Site ID : {{ e }} </v-list-item-subtitle>
-      </v-list-item>
-    </v-list>
+    <v-card-text>
+      <v-list>
+        <v-list-item v-for="(e, index) in props.userHistory" :key="index">
+          <v-list-item-title> History # {{ index + 1 }} </v-list-item-title>
+          <v-list-item-subtitle> Site ID : {{ e }} </v-list-item-subtitle>
+        </v-list-item>
+      </v-list>
+    </v-card-text>
   </v-card>
 </template>

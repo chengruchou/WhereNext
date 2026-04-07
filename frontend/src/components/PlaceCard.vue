@@ -8,10 +8,23 @@
     photoUrl: string | null
   }
   const props = defineProps<{ place: PlaceInfo | null }>()
+  const emit = defineEmits<{
+    (e: "submit-add-history", payload: { passPlace: PlaceInfo | null }): void
+  }>()
+
+  const addHistory = async () => {
+    emit("submit-add-history", { passPlace: props.place })
+  }
 </script>
 
 <template>
-  <v-card v-if="props.place" class="ma-4" elevation="4" title="Place Crad">
+  <v-card
+    v-if="props.place"
+    class="ma-4"
+    elevation="4"
+    title="Place Crad"
+    variant="outlined"
+    color="warning">
     <v-img v-if="props.place.photoUrl" :src="props.place.photoUrl" height="150" cover />
     <v-card-item>
       <v-card-title>
@@ -31,7 +44,8 @@
         variant="tonal">
         {{ type }}
       </v-chip>
+      <v-divider class="my-2" thickness="4" />
+      <v-btn text="Add to User History" @click="addHistory" block color="warning" />
     </v-card-text>
-    <v-btn text="Add to User History" block color="warning"/>
   </v-card>
 </template>

@@ -5,7 +5,7 @@
     (e: "submit-search-place", payload: { passPlaceName: string }): void
   }>()
 
-  const searchPlace = async (query: string) => {
+  const searchPlace = async () => {
     emit("submit-search-place", { passPlaceName: searchInput.value })
   }
 </script>

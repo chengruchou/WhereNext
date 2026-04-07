@@ -6,6 +6,7 @@
   import MapCanvas from "./components/MapCanvas.vue"
   import SearchPanel from "./components/SearchPanel.vue"
   import PlaceCard from "./components/PlaceCard.vue"
+import { ms } from "vuetify/iconsets/ms"
   interface PlaceInfo {
     name: string
     lat: number
@@ -18,7 +19,6 @@
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
   const userHistory = ref<number[]>()
   const userId = ref("")
-  const center = { lat: 23.001121896510238, lng: 120.22314068661719 }
   const showSearch = ref<PlaceInfo | null>(null)
   const showRecommend = ref<PlaceInfo[]>()
 
@@ -28,6 +28,17 @@
       if (userId.value) {
         userHistory.value = (await api.get(`/db/fetch/${userId.value}`)).data
       }
+    } catch (error) {
+      alert(error)
+    }
+  }
+
+  const addUserHistory = async (payload: { passPlace: PlaceInfo | null }) => {
+    try {
+      const place = payload.passPlace
+      const msg = (await api.post(`/db/add/${userId.value}`, place)).data
+      console.log("add db ", msg)
+      fetchUserHistory({passUserId: userId.value})
     } catch (error) {
       alert(error)
     }
@@ -104,11 +115,18 @@
 
 <template>
   <v-app>
-    <v-navigation-drawer permanent width="300">
-      <UserLogin @submit-user-id="fetchUserHistory" />
-      <HistoryList :user-history="userHistory" />
-      <SearchPanel @submit-search-place="searchPlaceId" />
-      <PlaceCard :place="showSearch" />
+    <v-navigation-drawer permanent width="600">
+      <v-row>
+        <v-col>
+          <UserLogin @submit-user-id="fetchUserHistory" />
+          <HistoryList :user-history="userHistory" />
+          <SearchPanel @submit-search-place="searchPlaceId" />
+          <PlaceCard :place="showSearch" @submit-add-history="addUserHistory" />
+        </v-col>
+        <v-col class="d-flex justify-center">
+          <v-btn text="Get next POIs" class="my-4" color="primary" />
+        </v-col>
+      </v-row>
     </v-navigation-drawer>
     <v-main>
       <MapCanvas />
