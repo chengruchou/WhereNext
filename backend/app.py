@@ -1,12 +1,21 @@
 from flask import Flask
 from flask_cors import CORS
-from routes.db_api import db_bp
+
+from database import db
 from routes.model_api import model_bp
+from routes.user_api import user_bp
 
 app = Flask(__name__)
 CORS(app)
 
-app.register_blueprint(db_bp)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///app.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db.init_app(app)
+
+with app.app_context():
+    db.create_all()
+
+app.register_blueprint(user_bp)
 app.register_blueprint(model_bp)
 
 if __name__ == "__main__":
