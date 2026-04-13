@@ -26,3 +26,10 @@ def add(user_id):
     db.session.add(new_hist)
     db.session.commit()
     return jsonify("write succeed")
+
+@user_bp.route("/<int:user_id>", methods=["DELETE"])
+def delete(user_id):
+    UserHist.query.filter(UserHist.user_id == user_id).delete()
+    db.session.commit()
+
+    return jsonify("delete succeed")

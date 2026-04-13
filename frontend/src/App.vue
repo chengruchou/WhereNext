@@ -8,7 +8,6 @@
   import PlaceCard from "./components/PlaceCard.vue"
   import type { GowallaPlace, UserHistory } from "./types/place"
 
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
   const userHistory = ref<UserHistory[]>([])
   const userId = ref<number | null>(null)
@@ -28,7 +27,7 @@
 
   const fetchUserHistory = async (payload: { passUserId: number | null }) => {
     try {
-      if(payload.passUserId || payload.passUserId===0){
+      if (payload.passUserId || payload.passUserId === 0) {
         console.log("search user ", payload.passUserId)
         userId.value = payload.passUserId
         userHistory.value = (await api.get(`/user/${userId.value}`)).data
@@ -39,12 +38,25 @@
     }
   }
 
+  const delUserHistory = async () => {
+    try {
+      const res = (await api.delete(`/user/${userId.value}`)).data
+      console.log(res)
+      fetchUserHistory({passUserId: userId.value})
+    } catch (error) {
+      alert(error)
+    }
+  }
+
   const addUserHistory = async (payload: { passPlace: GowallaPlace | null }) => {
     try {
       const place = payload.passPlace
       const visitTimeISO = new Date().toISOString()
       const msg = (
-        await api.post(`/user/${userId.value}`, { poi_id: place?.raw_poi_id, visit_time: visitTimeISO })
+        await api.post(`/user/${userId.value}`, {
+          poi_id: place?.raw_poi_id,
+          visit_time: visitTimeISO,
+        })
       ).data
       console.log("add db ", msg)
       fetchUserHistory({ passUserId: userId.value })
@@ -61,8 +73,7 @@
       if (res) {
         noSearchRes.value = false
         showSearch.value = res
-      }
-      else{
+      } else {
         noSearchRes.value = true
       }
     } catch (error) {
@@ -90,7 +101,7 @@
       <v-row>
         <v-col>
           <UserLogin @submit-user-id="fetchUserHistory" />
-          <HistoryList :user-history="userHistory" />
+          <HistoryList :user-history="userHistory" @handle-delete="delUserHistory" />
           <SearchPanel @submit-search-place="searchPlace" :no-search-res="noSearchRes" />
           <PlaceCard
             :place="showSearch"
@@ -103,6 +114,8 @@
         </v-col>
       </v-row>
     </v-navigation-drawer>
-    <v-main> </v-main>
+    <v-main>
+      <MapCanvas :show-recommend="showRecommend" :show-search="showSearch" />
+    </v-main>
   </v-app>
 </template>
