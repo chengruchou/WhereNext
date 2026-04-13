@@ -27,8 +27,9 @@ class UserHist(db.Model):
     visit_time = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
+        poi_record = POI.query.get(self.poi_id)
         return {
             "user_id": self.user_id,
-            "poi_id": self.poi_id,
-            "visit_time": self.visit_time,
+            "visit_time": self.visit_time.strftime("%Y-%m-%dT%H:%M:%SZ") if self.visit_time else None,
+            "poi_detail": poi_record.to_dict() if poi_record else None,
         }

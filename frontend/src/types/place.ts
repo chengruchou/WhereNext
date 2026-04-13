@@ -7,26 +7,32 @@ export interface PlaceInfo {
 }
 
 export interface GowallaPlace {
-  raw_poi_id: number;
-  latitude: number;
-  longitude: number;
-  checkins_count_from_events: number;
-  users_count_from_events: number;
-  item_id: number;
-  spot_latitude: number;
-  spot_longitude: number;
-  category_id: number;
-  category_name: string;
+  raw_poi_id: number
+  latitude: number
+  longitude: number
+  checkins_count_from_events: number | null
+  users_count_from_events: number | null
+  item_id: number | null
+  spot_latitude: number | null
+  spot_longitude: number | null
+  category_id: number | null
+  category_name: string | null
   raw_categories: Array<{
-    url: string;
-    name: string;
-  }>;
-  photos_count: number;
-  checkins_count: number;
-  users_count: number;
-  radius_meters: number;
-  highlights_count: number;
-  items_count: number;
-  max_items_count: number;
-  created_at: string;
+    url: string | null
+    name: string | null
+  }> | null
+  photos_count: number | null
+  checkins_count: number | null
+  users_count: number | null
+  radius_meters: number | null
+  highlights_count: number | null
+  items_count: number | null
+  max_items_count: number | null
+  created_at: string | null
+}
+
+export interface UserHistory {
+  user_id: number;
+  visit_time: string | null;
+  poi_detail: GowallaPlace | null; 
 }

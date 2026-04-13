@@ -1,21 +1,27 @@
-from flask import Blueprint, jsonify, request
+from datetime import datetime
 
 from database import UserHist, db
+from flask import Blueprint, jsonify, request
 
 user_bp = Blueprint("user", __name__, url_prefix="/api/user")
 
 
 @user_bp.route("/<int:user_id>", methods=["GET"])
 def fetch(user_id):
-    data = UserHist.query.get(user_id).to_dict()
-    return jsonify(data)
+    data = UserHist.query.filter(UserHist.user_id==user_id).all()
+    if data is None:
+        return jsonify(None)
+    return jsonify([e.to_dict() for e in data])
 
 
-@user_bp.route("/<string:user_id>", methods=["POST"])
-def add():
+@user_bp.route("/<int:user_id>", methods=["POST"])
+def add(user_id):
     rq = request.json
+    print("rq", rq)
     new_hist = UserHist(
-        user_id=rq["user_id"], poi_id=rq["poi_id"], visit_time=rq.get("visit_time")
+        user_id=user_id,
+        poi_id=rq["poi_id"],
+        visit_time=datetime.fromisoformat(rq.get("visit_time")),
     )
     db.session.add(new_hist)
     db.session.commit()
