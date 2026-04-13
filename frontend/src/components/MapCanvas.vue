@@ -5,8 +5,8 @@
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const props = defineProps<{ showSearch: GowallaPlace | null; showRecommend: GowallaPlace[] }>()
   const center = computed(() => {
-    if (props.showSearch == null) return { lat: 23.001121896510238, lng: 120.22314068661719 }
-    else return { lat: props.showSearch.lat, lng: props.showSearch.lng }
+    if (props.showSearch == null) return { lat: 39.0528237667, lng: -94.59031105 }
+    else return { lat: props.showSearch.latitude, lng: props.showSearch.longitude }
   })
 </script>
 
@@ -19,11 +19,16 @@
     :zoom="15">
     <AdvancedMarker
       v-if="props.showSearch"
-      :options="{ position: center, title: props.showSearch?.name }" />
+      :options="{
+        position: center,
+        title: String(props.showSearch.raw_poi_id + ' ' + props.showSearch.category_name),
+      }">
+    </AdvancedMarker>
     <span v-for="e in props.showRecommend">
       <AdvancedMarker
-        :options="{ position: { lat: e.lat, lng: e.lng }, title: e.name }"
-        :pinOptions="{ background: 'yellow' }" />
+        :options="{ position: { lat: e.latitude, lng: e.longitude }, title: String(e.raw_poi_id + ' ' + e.category_name) }"
+        :pinOptions="{ background: 'yellow' }">
+      </AdvancedMarker>
     </span>
   </GoogleMap>
 </template>

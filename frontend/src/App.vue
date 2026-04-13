@@ -42,7 +42,7 @@
     try {
       const res = (await api.delete(`/user/${userId.value}`)).data
       console.log(res)
-      fetchUserHistory({passUserId: userId.value})
+      fetchUserHistory({ passUserId: userId.value })
     } catch (error) {
       alert(error)
     }
@@ -85,7 +85,7 @@
     try {
       const res = (await api.get(`/model/genpoi/${userId.value}`)).data
       console.log("got POI res", res)
-      showRecommend.value = res as GowallaPlace[]
+      showRecommend.value = res
     } catch (error) {
       alert(error)
     }
@@ -111,6 +111,7 @@
         </v-col>
         <v-col class="d-flex flex-column">
           <v-btn text="Get next POIs" @click="getNextPOI" class="my-4 ma-3" color="primary" />
+          <PlaceCard v-for="(e, idx) in showRecommend" :place="e" :show-add="false" :index="idx" />
         </v-col>
       </v-row>
     </v-navigation-drawer>

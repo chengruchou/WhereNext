@@ -1,0 +1,34 @@
+{
+  "config": {
+    "input": "datasets\\\\ca\\\\loc-gowalla_totalCheckins.txt",
+    "output_dir": "datasets\\\\Gowalla_new",
+    "spots_input": "datasets\\ca\\gowalla_spots_subset1.csv",
+    "session_interval_days": 1,
+    "max_session_len": 20,
+    "min_session_len": 2,
+    "min_item_support": 5,
+    "top_n_items": 30000,
+    "test_split": 0.2,
+    "save_poi_metadata": true
+  },
+  "stats": {
+    "raw_rows": 6442892,
+    "filtered_rows": 1128234,
+    "train_rows": 909728,
+    "test_rows": 212652,
+    "train_sessions": 234461,
+    "test_sessions": 57520,
+    "train_examples": 675267,
+    "test_examples": 155132,
+    "n_items": 29511,
+    "n_node_for_model": 29512
+  },
+  "artifacts": {
+    "train.txt": "datasets\\\\Gowalla_new\\train.txt",
+    "test.txt": "datasets\\\\Gowalla_new\\test.txt",
+    "all_train_seq.txt": "datasets\\\\Gowalla_new\\all_train_seq.txt",
+    "raw_location2item.json": "datasets\\\\Gowalla_new\\raw_location2item.json",
+    "item2raw_location.json": "datasets\\\\Gowalla_new\\item2raw_location.json",
+    "poi_metadata.json": "datasets\\\\Gowalla_new\\poi_metadata.json"
+  }
+}

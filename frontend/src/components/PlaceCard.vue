@@ -13,24 +13,24 @@
 
 <template>
   <v-card v-if="props.place" class="ma-4" elevation="4" variant="outlined" color="warning">
-    <v-card-title v-if="props.showAdd"> Place Card </v-card-title>
-    <v-card-title v-else> # {{ props.index + 1 }}</v-card-title>
     <v-card-item>
       <v-card-title>
-        {{ props.place.raw_poi_id }}
+        {{ props.showAdd ? "Place Card" : `# ${index + 1}` }}
       </v-card-title>
-      <v-card-subtitle>
-        {{ props.place.latitude.toFixed(4) }}, {{ props.place.longitude.toFixed(4) }}
-      </v-card-subtitle>
-      <v-card-text>
-        Category : {{ props.place.category_name }}
-      </v-card-text>
+      <template #append>
+        <v-chip size="small" variant="tonal" color="warning">
+          ID: {{ props.place.raw_poi_id }}
+        </v-chip>
+      </template>
     </v-card-item>
-    <v-card-text>
-      <span v-if="props.showAdd">
-        <v-divider class="my-2" thickness="4" />
-        <v-btn text="Add to User History" @click="addHistory" block color="warning" />
-      </span>
-    </v-card-text>
+    <v-divider class="mx-4"></v-divider>
+    <v-card-item>
+      <v-card-subtitle>
+        Pos : ({{ props.place.latitude.toFixed(4) }}, {{ props.place.longitude.toFixed(4) }})
+      </v-card-subtitle>
+    </v-card-item>
+    <v-card-actions v-if="showAdd" class="px-4 pb-4">
+      <v-btn variant="flat" color="warning" block @click="addHistory"> Add to User History </v-btn>
+    </v-card-actions>
   </v-card>
 </template>

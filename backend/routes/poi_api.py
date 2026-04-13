@@ -3,7 +3,6 @@ from flask import Blueprint, jsonify, request
 
 poi_bp = Blueprint("poi", __name__, url_prefix="/api/poi")
 
-
 @poi_bp.route("/", methods=["POST"])
 def fetch():
     rq = request.json
