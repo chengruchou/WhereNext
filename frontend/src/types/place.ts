@@ -32,7 +32,8 @@ export interface GowallaPlace {
 }
 
 export interface UserHistory {
-  user_id: number;
-  visit_time: string | null;
-  poi_detail: GowallaPlace | null; 
+  log_id: number
+  user_id: number
+  visit_time: string | null
+  poi_detail: GowallaPlace | null
 }

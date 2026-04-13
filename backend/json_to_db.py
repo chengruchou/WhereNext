@@ -6,7 +6,7 @@ from database import POI, db
 from sqlalchemy import text
 from tqdm import tqdm
 
-data = json.load(open("backend/data/filtered_poi_metadata.json"))
+data = json.load(open("backend/datasets/filtered_poi_metadata.json"))
 df2 = pd.DataFrame.from_dict(data, orient="index")
 
 with app.app_context():

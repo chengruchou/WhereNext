@@ -33,3 +33,9 @@ def delete(user_id):
     db.session.commit()
 
     return jsonify("delete succeed")
+
+@user_bp.route("delone/<int:log_id>", methods=["DELETE"])
+def delete_one(log_id):
+    db.session.delete(UserHist.query.get(log_id))
+    db.session.commit()
+    return jsonify("delete one succeed")

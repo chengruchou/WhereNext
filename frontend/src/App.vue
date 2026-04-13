@@ -14,6 +14,7 @@
   const showSearch = ref<GowallaPlace | null>(null)
   const showRecommend = ref<GowallaPlace[]>([])
   const noSearchRes = ref(false)
+  const isInferring = ref(false)
 
   const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
 
@@ -41,6 +42,16 @@
   const delUserHistory = async () => {
     try {
       const res = (await api.delete(`/user/${userId.value}`)).data
+      console.log(res)
+      fetchUserHistory({ passUserId: userId.value })
+    } catch (error) {
+      alert(error)
+    }
+  }
+
+  const delOneHistory = async (payload: {delId: number}) => {
+    try {
+      const res = (await api.delete(`/user/delone/${payload.delId}`)).data
       console.log(res)
       fetchUserHistory({ passUserId: userId.value })
     } catch (error) {
@@ -83,7 +94,9 @@
 
   const getNextPOI = async () => {
     try {
+      isInferring.value = true
       const res = (await api.get(`/model/genpoi/${userId.value}`)).data
+      isInferring.value = false
       console.log("got POI res", res)
       showRecommend.value = res
     } catch (error) {
@@ -94,14 +107,17 @@
 
 <template>
   <v-app>
-    <v-app-bar title="POI">
-      {{ currentTime }}
+    <v-app-bar title="POI" color="secondary" density="compact">
+      {{ currentTime }}<v-spacer> </v-spacer>
     </v-app-bar>
     <v-navigation-drawer permanent width="600">
       <v-row>
         <v-col>
           <UserLogin @submit-user-id="fetchUserHistory" />
-          <HistoryList :user-history="userHistory" @handle-delete="delUserHistory" />
+          <HistoryList
+            :user-history="userHistory"
+            @delete-all="delUserHistory"
+            @delete-one="delOneHistory" />
           <SearchPanel @submit-search-place="searchPlace" :no-search-res="noSearchRes" />
           <PlaceCard
             :place="showSearch"
@@ -110,7 +126,12 @@
             @submit-add-history="addUserHistory" />
         </v-col>
         <v-col class="d-flex flex-column">
-          <v-btn text="Get next POIs" @click="getNextPOI" class="my-4 ma-3" color="primary" />
+          <v-btn
+            text="Get next POIs"
+            @click="getNextPOI"
+            class="my-4 ma-3"
+            color="primary"
+            :loading="isInferring" />
           <PlaceCard v-for="(e, idx) in showRecommend" :place="e" :show-add="false" :index="idx" />
         </v-col>
       </v-row>
