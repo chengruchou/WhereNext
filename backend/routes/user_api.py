@@ -11,7 +11,7 @@ def fetch(user_id):
     data = UserHist.query.filter(UserHist.user_id==user_id).all()
     if data is None:
         return jsonify(None)
-    return jsonify([e.to_dict() for e in data])
+    return jsonify({"userHist": [e.to_dict() for e in data], "userHistPlace": [e.to_dict()["poi_detail"] for e in data]})
 
 
 @user_bp.route("/<int:user_id>", methods=["POST"])

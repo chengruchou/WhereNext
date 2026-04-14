@@ -1,15 +1,29 @@
-from database import POI
+from database import POI, db
 from flask import Blueprint, jsonify, request
 
 poi_bp = Blueprint("poi", __name__, url_prefix="/api/poi")
 
-@poi_bp.route("/", methods=["POST"])
-def fetch():
+@poi_bp.route("/id", methods=["POST"])
+def fetch_id():
     rq = request.json
-    # pois = POI.query.filter((POI.cat_name == rq['cat_name'])).all()
     print("rq: ", rq)
     poi = POI.query.get(rq.get("id"))
     if poi is None:
         return jsonify(None)
     else:
-        return jsonify(poi.to_dict())
+        return jsonify([poi.to_dict()])
+    
+@poi_bp.route("/cat", methods=["POST"])
+def fetch_cat():
+    rq = request.json
+    print("rq: ", rq)
+    pois = POI.query.filter(POI.cat_name == rq.get("cat"))
+    if pois is None:
+        return jsonify(None)
+    else:
+        return jsonify([e.to_dict() for e in pois])
+    
+@poi_bp.route("/allcat", methods=["GET"])
+def allcat():
+    data = db.session.query(POI.cat_name).distinct().all()
+    return jsonify([e[0] for e in data])

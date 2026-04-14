@@ -70,15 +70,6 @@ def gen_poi(user_id):
         result = [poi_map[pid] for pid in predicted_item_ids if pid in poi_map]
         return jsonify(result)
 
-    except subprocess.CalledProcessError as e:
-        error_msg = e.stderr if e.stderr else e.stdout
-        print("\n" + "="*50)
-        print("[Model Inference Failed]")
-        print(f"Command: {' '.join(e.cmd)}")
-        print(f"Error Traceback:\n{error_msg}")
-        print("="*50 + "\n")
-        return jsonify({"error": "Model Execution Failed", "details": error_msg}), 500
-
     except Exception as e:
         print(f"Server Error: {str(e)}")
         return jsonify({"error": str(e)}), 500

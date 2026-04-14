@@ -18,7 +18,7 @@
 <template>
   <v-card title="User History" variant="outlined" class="mx-4" color="secondary">
     <template #append>
-      <v-btn color="error" variant="tonal" size="small" @click="deleteAll"> Delete all </v-btn>
+      <v-btn v-if="props.userHistory?.length!==0" color="error" variant="tonal" size="small" @click="deleteAll"> Delete all </v-btn>
     </template>
     <v-card-text v-if="!props.userHistory || props.userHistory.length == 0">
       No history

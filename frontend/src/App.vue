@@ -10,28 +10,42 @@
 
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
   const userHistory = ref<UserHistory[]>([])
+  const userHistPlace = ref<GowallaPlace[]>([])
   const userId = ref<number | null>(null)
-  const showSearch = ref<GowallaPlace | null>(null)
+  const showSearch = ref<GowallaPlace[]>([])
   const showRecommend = ref<GowallaPlace[]>([])
   const noSearchRes = ref(false)
   const isInferring = ref(false)
-
   const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
 
-  onMounted(() => {
+  const allCat = ref([])
+
+  onMounted(async () => {
     const timer = setInterval(() => {
       currentTime.value = new Date().toLocaleString("zh-TW", { hour12: false })
     }, 1000)
-
+    allCat.value = await fetchAllCat()
     onUnmounted(() => clearInterval(timer))
   })
+
+  const fetchAllCat = async () => {
+    try {
+      console.log("Fetching All Cat")
+      return (await api.get("/poi/allcat")).data
+    } catch (error) {
+      alert(error)
+      return []
+    }
+  }
 
   const fetchUserHistory = async (payload: { passUserId: number | null }) => {
     try {
       if (payload.passUserId || payload.passUserId === 0) {
         console.log("search user ", payload.passUserId)
         userId.value = payload.passUserId
-        userHistory.value = (await api.get(`/user/${userId.value}`)).data
+        const res = (await api.get(`/user/${userId.value}`)).data
+        userHistory.value = res.userHist
+        userHistPlace.value = res.userHistPlace
         console.log("search result ", userHistory.value)
       }
     } catch (error) {
@@ -49,7 +63,7 @@
     }
   }
 
-  const delOneHistory = async (payload: {delId: number}) => {
+  const delOneHistory = async (payload: { delId: number }) => {
     try {
       const res = (await api.delete(`/user/delone/${payload.delId}`)).data
       console.log(res)
@@ -76,10 +90,26 @@
     }
   }
 
-  const searchPlace = async (payload: { passPlaceId: number | null }) => {
+  const searchPlaceId = async (payload: { passPlaceId: number | null }) => {
     try {
       console.log("Search place Id ", payload.passPlaceId)
-      const res = (await api.post("/poi/", { id: payload.passPlaceId })).data
+      const res = (await api.post("/poi/id", { id: payload.passPlaceId })).data
+      console.log("search place res : ", res)
+      if (res) {
+        noSearchRes.value = false
+        showSearch.value = res
+      } else {
+        noSearchRes.value = true
+      }
+    } catch (error) {
+      console.log(error)
+    }
+  }
+
+  const searchPlaceCat = async (payload: { passPlaceCat: string | null }) => {
+    try {
+      console.log("Search place Cat ", payload.passPlaceCat)
+      const res = (await api.post("/poi/cat", { cat: payload.passPlaceCat })).data
       console.log("search place res : ", res)
       if (res) {
         noSearchRes.value = false
@@ -118,9 +148,14 @@
             :user-history="userHistory"
             @delete-all="delUserHistory"
             @delete-one="delOneHistory" />
-          <SearchPanel @submit-search-place="searchPlace" :no-search-res="noSearchRes" />
+          <SearchPanel
+            @submit-search-place-id="searchPlaceId"
+            @submit-search-place-cat="searchPlaceCat"
+            :no-search-res="noSearchRes"
+            :all-cat="allCat" />
           <PlaceCard
-            :place="showSearch"
+            v-for="e in showSearch"
+            :place="e"
             :show-add="true"
             :index="0"
             @submit-add-history="addUserHistory" />
@@ -137,7 +172,7 @@
       </v-row>
     </v-navigation-drawer>
     <v-main>
-      <MapCanvas :show-recommend="showRecommend" :show-search="showSearch" />
+      <MapCanvas :show-recommend="showRecommend" :show-search="showSearch" :user-hist="userHistPlace" />
     </v-main>
   </v-app>
 </template>

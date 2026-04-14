@@ -14,8 +14,8 @@
 <template>
   <v-card v-if="props.place" class="ma-4" elevation="4" variant="outlined" color="warning">
     <v-card-item>
-      <v-card-title>
-        {{ props.showAdd ? "Place Card" : `# ${index + 1}` }}
+      <v-card-title class="text-wrap">
+        {{ props.showAdd ? "" : `# ${index + 1}` }} {{ props.place.category_name }}
       </v-card-title>
       <template #append>
         <v-chip size="small" variant="tonal" color="warning">
