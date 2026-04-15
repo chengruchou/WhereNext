@@ -126,3 +126,4 @@ npm run dev
 ```
 
 ## 4. Visit site http://localhost:3000/
+type ctrl + c in both terminals to terminate both backend and frontend
