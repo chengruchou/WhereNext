@@ -1,0 +1,71 @@
+{
+  "session": [
+    22518,
+    25876,
+    27965,
+    27104,
+    19252
+  ],
+  "predictions": [
+    {
+      "rank": 1,
+      "item_id": 25876,
+      "score": 20.273935317993164,
+      "raw_location_id": 43894
+    },
+    {
+      "rank": 2,
+      "item_id": 18351,
+      "score": 19.23438835144043,
+      "raw_location_id": 127662
+    },
+    {
+      "rank": 3,
+      "item_id": 18355,
+      "score": 19.054649353027344,
+      "raw_location_id": 39354
+    },
+    {
+      "rank": 4,
+      "item_id": 22518,
+      "score": 19.007282257080078,
+      "raw_location_id": 110588
+    },
+    {
+      "rank": 5,
+      "item_id": 29033,
+      "score": 18.76502227783203,
+      "raw_location_id": 395187
+    },
+    {
+      "rank": 6,
+      "item_id": 18043,
+      "score": 17.63595962524414,
+      "raw_location_id": 37546
+    },
+    {
+      "rank": 7,
+      "item_id": 27988,
+      "score": 17.366016387939453,
+      "raw_location_id": 578526
+    },
+    {
+      "rank": 8,
+      "item_id": 22512,
+      "score": 17.343761444091797,
+      "raw_location_id": 159002
+    },
+    {
+      "rank": 9,
+      "item_id": 27965,
+      "score": 17.21466827392578,
+      "raw_location_id": 43814
+    },
+    {
+      "rank": 10,
+      "item_id": 29118,
+      "score": 17.144929885864258,
+      "raw_location_id": 424870
+    }
+  ]
+}
