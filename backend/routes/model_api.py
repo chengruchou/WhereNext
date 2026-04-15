@@ -17,7 +17,7 @@ def gen_poi(user_id):
     if not histories:
         return jsonify([])
 
-    temp_txt = f"datasets/tmp_visit_{user_id}.txt"
+    temp_txt = f"datasets/temp_visit_{user_id}.txt"
     temp_out = f"datasets/temp_out_{user_id}.json"
 
     try:
@@ -58,22 +58,22 @@ def gen_poi(user_id):
 
         subprocess.run(cmd, check=True, capture_output=True, text=True)
 
-        predicted_item_ids = []
-        if os.path.exists(temp_out):
-            with open(temp_out, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                predicted_item_ids = [p["item_id"] for p in data.get("predictions", [])]
+        with open(temp_out, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            predicts = data.get("predictions", [])
+            raw_ids = [e['raw_location_id'] for e in predicts]
 
-        poi_records = POI.query.filter(POI.item_id.in_(predicted_item_ids)).all()
-        poi_map = {poi.item_id: poi.to_dict() for poi in poi_records}
+        pois = POI.query.filter(POI.id.in_(raw_ids)).all()
+        res = [e.to_dict() for e in pois]
 
-        result = [poi_map[pid] for pid in predicted_item_ids if pid in poi_map]
-        return jsonify(result)
+        return jsonify(res)
 
     except Exception as e:
         print(f"Server Error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
     finally:
-        if os.path.exists(temp_txt): os.remove(temp_txt)
-        if os.path.exists(temp_out): os.remove(temp_out)
+        if os.path.exists(temp_txt): 
+            os.remove(temp_txt)
+        if os.path.exists(temp_out): 
+            os.remove(temp_out)
