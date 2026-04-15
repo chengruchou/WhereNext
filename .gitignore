@@ -45,3 +45,6 @@ __pycache__/
 *.db
 
 poi_metadata.json
+frontend/.vscode/extensions.json
+tmp.py
+tmp.ipynb
