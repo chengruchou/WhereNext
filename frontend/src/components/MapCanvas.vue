@@ -7,6 +7,7 @@
     showSearch: GowallaPlace[]
     showRecommend: GowallaPlace[]
     userHist: GowallaPlace[]
+    focusedPlace: GowallaPlace | null
   }>()
   const center = ref({ lat: 39.0528237667, lng: -94.59031105 })
 
@@ -32,6 +33,18 @@
   watch(
     () => props.userHist,
     (newVal) => updateCenter(newVal),
+    { deep: true },
+  )
+  watch(
+    () => props.focusedPlace,
+    (newVal) => {
+      if (newVal) {
+        center.value = {
+          lat: newVal.latitude,
+          lng: newVal.longitude,
+        }
+      }
+    },
     { deep: true },
   )
 </script>
