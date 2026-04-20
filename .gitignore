@@ -50,3 +50,7 @@ tmp.py
 tmp.ipynb
 !backend/model_core/MG-DSGAT/save_model/Demo_model_exp30_Gowalla_512_seed_2023-last_k_4_best_model.pt
 backend/eval/outputs/
+
+# uv files
+uv.lock
+uv.log
