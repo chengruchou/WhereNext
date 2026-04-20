@@ -483,7 +483,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     # inference behavior
     parser.add_argument("--topk", type=int, default=10, help="Number of predictions to return")
-    parser.add_argument("--exclude_seen", action="store_true",
+    parser.add_argument("--exclude_seen", action="store_true", default=True,
                         help="Exclude items already appearing in the input session")
     parser.add_argument("--device", type=str, default="cuda",
                         choices=["cuda", "cpu"], help="Inference device")
