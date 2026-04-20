@@ -1,9 +1,12 @@
 import json
 import os
 import subprocess
+import sys
 
+PYTHON_EXE = sys.executable
 from database import POI, UserHist
 from flask import Blueprint, jsonify
+from semantic import rerank_predictions_for_user
 
 model_bp = Blueprint("model", __name__, url_prefix="/api/model")
 
@@ -31,7 +34,7 @@ def gen_poi(user_id):
                 f.write(f"{user_id} {t_str} {poi.lat} {poi.lng} {poi.id}\n")
 
         cmd = [
-            "python",
+            PYTHON_EXE,
             "model_core/MG-DSGAT/src/infer_sbr.py",
 
             "--dataset",
@@ -56,15 +59,45 @@ def gen_poi(user_id):
             temp_out,
         ]
 
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
+        # subprocess.run(cmd, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
 
+        print("=== infer_sbr stdout ===")
+        print(result.stdout)
+        print("=== infer_sbr stderr ===")
+        print(result.stderr)
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"infer_sbr failed with code {result.returncode}\n"
+                f"STDOUT:\n{result.stdout}\n\n"
+                f"STDERR:\n{result.stderr}"
+            )
+        
+        
         with open(temp_out, "r", encoding="utf-8") as f:
             data = json.load(f)
             predicts = data.get("predictions", [])
-            raw_ids = [e['raw_location_id'] for e in predicts]
+
+        try:
+            predicts = rerank_predictions_for_user(
+                user_id=user_id,
+                predictions=predicts,
+                histories=histories,
+            )
+        except Exception as rerank_error:
+            print(f"Semantic reranker fallback to original SBR order: {rerank_error}")
+
+        raw_ids = [e["raw_location_id"] for e in predicts if "raw_location_id" in e]
 
         pois = POI.query.filter(POI.id.in_(raw_ids)).all()
-        res = [e.to_dict() for e in pois]
+        poi_by_id = {int(poi.id): poi.to_dict() for poi in pois}
+        res = [poi_by_id[raw_id] for raw_id in raw_ids if raw_id in poi_by_id]
 
         return jsonify(res)
 
