@@ -96,8 +96,14 @@ def gen_poi(user_id):
         raw_ids = [e["raw_location_id"] for e in predicts if "raw_location_id" in e]
 
         pois = POI.query.filter(POI.id.in_(raw_ids)).all()
-        poi_by_id = {int(poi.id): poi.to_dict() for poi in pois}
-        res = [poi_by_id[raw_id] for raw_id in raw_ids if raw_id in poi_by_id]
+        # poi_by_id = {int(poi.id): poi.to_dict() for poi in pois}
+        # res = [poi_by_id[raw_id] for raw_id in raw_ids if raw_id in poi_by_id]
+        res = []
+        for e in pois:
+            if e.cat_name != '':
+                res.append(e.to_dict())
+
+        res = res[:min(len(res), 5)]
 
         return jsonify(res)
 
