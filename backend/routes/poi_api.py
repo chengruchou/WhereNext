@@ -26,4 +26,8 @@ def fetch_cat():
 @poi_bp.route("/allcat", methods=["GET"])
 def allcat():
     data = db.session.query(POI.cat_name).distinct().all()
-    return jsonify([e[0] for e in data])
+    all_cat = []
+    for e in data:
+        if e[0]:
+            all_cat.append(e[0])
+    return jsonify(all_cat)
