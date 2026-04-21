@@ -167,7 +167,7 @@
 
           <div class="text-warning text-overline mt-2 mb-0 px-4">Search Results</div>
 
-          <div class="flex-grow-1 overflow-y-auto px-4 pb-4">
+          <div class="flex-grow-1 overflow-y-auto px-4 pb-4" style="min-height: 400px;">
             <div v-if="!showSearch || showSearch.length === 0" class="text-grey text-center mt-4">
               Awaiting search...
             </div>
