@@ -51,7 +51,7 @@
     </v-card-text>
 
     <v-card-actions v-if="showAdd" class="px-4 pb-4">
-      <v-btn variant="flat" color="warning" block @click="addHistory"> Add to User History </v-btn>
+      <v-btn variant="flat" color="warning" block @click.stop="addHistory"> Add to User History </v-btn>
     </v-card-actions>
     <v-card-actions class="px-4 pb-4">
       <v-btn variant="tonal" color="info" block @click.stop="openDetail"> Show Detail </v-btn>

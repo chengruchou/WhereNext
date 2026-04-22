@@ -76,6 +76,7 @@
 
   const addUserHistory = async (payload: { passPlace: GowallaPlace | null }) => {
     try {
+      console.log("add place ", payload.passPlace)
       const place = payload.passPlace
       const visitTimeISO = new Date().toISOString()
       const msg = (
@@ -167,7 +168,7 @@
 
           <div class="text-warning text-overline mt-2 mb-0 px-4">Search Results</div>
 
-          <div class="flex-grow-1 overflow-y-auto px-4 pb-4" style="min-height: 400px;">
+          <div class="flex-grow-1 overflow-y-auto px-4 pb-4" style="min-height: 400px">
             <div v-if="!showSearch || showSearch.length === 0" class="text-grey text-center mt-4">
               Awaiting search...
             </div>
@@ -199,9 +200,10 @@
                 v-for="(e, idx) in showRecommend"
                 :key="e.raw_poi_id || idx"
                 :place="e"
-                :show-add="false"
+                :show-add="true"
                 :index="idx"
-                @focus-place="handleFocusPlace" />
+                @focus-place="handleFocusPlace"
+                @submit-add-history="addUserHistory" />
             </div>
           </div>
         </v-col>
