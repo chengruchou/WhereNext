@@ -97,13 +97,19 @@ def gen_poi(user_id):
 
         pois = POI.query.filter(POI.id.in_(raw_ids)).all()
         # poi_by_id = {int(poi.id): poi.to_dict() for poi in pois}
-        # res = [poi_by_id[raw_id] for raw_id in raw_ids if raw_id in poi_by_id]
-        res = []
-        for e in pois:
-            if e.cat_name != '':
-                res.append(e.to_dict())
+        poi_by_id = {
+            int(poi.id): poi.to_dict()
+            for poi in pois
+            if poi.cat_name != ''
+        }
 
-        res = res[:min(len(res), 5)]
+        res = [poi_by_id[raw_id] for raw_id in raw_ids if raw_id in poi_by_id][:5]
+        # res = []
+        # for e in pois:
+        #     if e.cat_name != '':
+        #         res.append(e.to_dict())
+
+        # res = res[:min(len(res), 5)]
 
         return jsonify(res)
 
