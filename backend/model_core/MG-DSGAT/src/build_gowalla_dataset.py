@@ -7,6 +7,8 @@ Build Gowalla dataset artifacts for the current SBR pipeline.
 Main outputs:
 - train.txt                  : pickle((train_prefixes, train_targets))
 - test.txt                   : pickle((test_prefixes, test_targets))
+- train_with_timestamps.json : event-level supervised train examples
+- test_with_timestamps.json  : event-level supervised test examples
 - all_train_seq.txt          : pickle(list_of_full_train_sessions)
 - raw_location2item.json     : raw_poi_id -> internal_item_id (1-based)
 - item2raw_location.json     : internal_item_id -> raw_poi_id
@@ -280,6 +282,106 @@ def make_supervised_examples(full_sessions: List[List[int]]) -> Tuple[List[List[
             targets.append(seq[i])
 
     return prefixes, targets
+
+
+def format_timestamp_iso(timestamp) -> str:
+    """
+    Format a pandas timestamp as the Gowalla-style UTC ISO string.
+    """
+    ts = pd.Timestamp(timestamp)
+    if pd.isna(ts):
+        raise ValueError("Cannot format missing timestamp.")
+    if ts.tzinfo is not None:
+        ts = ts.tz_convert("UTC").tz_localize(None)
+    return ts.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def group_sessions_as_event_sequences(df: pd.DataFrame) -> List[List[dict]]:
+    """
+    Convert event rows into full ordered session event sequences.
+
+    This intentionally mirrors group_sessions_as_sequences() so timestamp
+    artifacts preserve the exact same session order and event order used by
+    train.txt/test.txt.
+    """
+    df = df.sort_values(["session_id", "timestamp"]).copy()
+    event_sessions: List[List[dict]] = []
+
+    for _, session_df in df.groupby("session_id"):
+        events: List[dict] = []
+        for _, row in session_df.iterrows():
+            events.append(
+                {
+                    "item_id": int(row["item_id"]),
+                    "raw_location_id": int(row["raw_poi_id"]),
+                    "timestamp": format_timestamp_iso(row["timestamp"]),
+                }
+            )
+        event_sessions.append(events)
+
+    return event_sessions
+
+
+def make_supervised_event_examples(event_sessions: List[List[dict]]) -> List[dict]:
+    """
+    Convert event sessions into timestamp-aware prefix-target examples.
+
+    The prefix-target loop is the same as make_supervised_examples().
+    """
+    samples: List[dict] = []
+    sample_id = 0
+
+    for session in event_sessions:
+        if len(session) < 2:
+            continue
+        for i in range(1, len(session)):
+            samples.append(
+                {
+                    "sample_id": sample_id,
+                    "history_events": session[:i],
+                    "target_event": session[i],
+                }
+            )
+            sample_id += 1
+
+    return samples
+
+
+def validate_event_examples_against_pickle(
+    pickle_path: str,
+    event_examples: List[dict],
+) -> None:
+    """
+    Ensure timestamp-aware examples match the existing MG-DSGAT examples.
+    """
+    with open(pickle_path, "rb") as f:
+        prefixes, targets = pickle.load(f)
+
+    if len(prefixes) != len(event_examples) or len(targets) != len(event_examples):
+        raise ValueError(
+            "Timestamp artifact validation failed: "
+            f"pickle examples={len(prefixes)}, event examples={len(event_examples)}"
+        )
+
+    for index, (history_item_ids, target_item_id, event_sample) in enumerate(
+        zip(prefixes, targets, event_examples)
+    ):
+        event_history_ids = [
+            int(event["item_id"])
+            for event in event_sample["history_events"]
+        ]
+        event_target_id = int(event_sample["target_event"]["item_id"])
+
+        if event_history_ids != [int(item_id) for item_id in history_item_ids]:
+            raise ValueError(
+                "Timestamp artifact validation failed at sample "
+                f"{index}: history mismatch"
+            )
+        if event_target_id != int(target_item_id):
+            raise ValueError(
+                "Timestamp artifact validation failed at sample "
+                f"{index}: target mismatch"
+            )
 
 
 def parse_category_cell(cell) -> Tuple[Optional[int], Optional[str], list]:
@@ -596,6 +698,8 @@ def main():
     print("Step 7/9: Build full sessions")
     train_full_sessions = group_sessions_as_sequences(train_df, item_col="item_id")
     test_full_sessions = group_sessions_as_sequences(test_df, item_col="item_id")
+    train_event_sessions = group_sessions_as_event_sequences(train_df)
+    test_event_sessions = group_sessions_as_event_sequences(test_df)
 
     print(f"Full train sessions: {len(train_full_sessions):,}")
     print(f"Full test sessions: {len(test_full_sessions):,}")
@@ -604,6 +708,8 @@ def main():
     print("Step 8/9: Build supervised prefix-target pairs")
     train_prefixes, train_targets = make_supervised_examples(train_full_sessions)
     test_prefixes, test_targets = make_supervised_examples(test_full_sessions)
+    train_event_examples = make_supervised_event_examples(train_event_sessions)
+    test_event_examples = make_supervised_event_examples(test_event_sessions)
 
     print(f"Train examples: {len(train_prefixes):,}")
     print(f"Test examples: {len(test_prefixes):,}")
@@ -612,6 +718,8 @@ def main():
     print("Step 9/9: Saving artifacts")
     train_path = os.path.join(cfg.output_dir, "train.txt")
     test_path = os.path.join(cfg.output_dir, "test.txt")
+    train_with_timestamps_path = os.path.join(cfg.output_dir, "train_with_timestamps.json")
+    test_with_timestamps_path = os.path.join(cfg.output_dir, "test_with_timestamps.json")
     all_train_seq_path = os.path.join(cfg.output_dir, "all_train_seq.txt")
     raw2item_path = os.path.join(cfg.output_dir, "raw_location2item.json")
     item2raw_path = os.path.join(cfg.output_dir, "item2raw_location.json")
@@ -619,6 +727,10 @@ def main():
 
     save_pickle((train_prefixes, train_targets), train_path)
     save_pickle((test_prefixes, test_targets), test_path)
+    validate_event_examples_against_pickle(train_path, train_event_examples)
+    validate_event_examples_against_pickle(test_path, test_event_examples)
+    save_json(train_event_examples, train_with_timestamps_path)
+    save_json(test_event_examples, test_with_timestamps_path)
     save_pickle(train_full_sessions, all_train_seq_path)
     save_json(raw2item, raw2item_path)
     save_json(item2raw, item2raw_path)
@@ -634,12 +746,16 @@ def main():
             "test_sessions": int(len(test_full_sessions)),
             "train_examples": int(len(train_prefixes)),
             "test_examples": int(len(test_prefixes)),
+            "train_event_examples": int(len(train_event_examples)),
+            "test_event_examples": int(len(test_event_examples)),
             "n_items": int(len(raw2item)),
             "n_node_for_model": int(len(raw2item) + 1),  # +1 for padding index 0
         },
         "artifacts": {
             "train.txt": train_path,
             "test.txt": test_path,
+            "train_with_timestamps.json": train_with_timestamps_path,
+            "test_with_timestamps.json": test_with_timestamps_path,
             "all_train_seq.txt": all_train_seq_path,
             "raw_location2item.json": raw2item_path,
             "item2raw_location.json": item2raw_path,
@@ -660,6 +776,8 @@ def main():
 
     print(f"Saved: {train_path}")
     print(f"Saved: {test_path}")
+    print(f"Saved: {train_with_timestamps_path}")
+    print(f"Saved: {test_with_timestamps_path}")
     print(f"Saved: {all_train_seq_path}")
     print(f"Saved: {raw2item_path}")
     print(f"Saved: {item2raw_path}")

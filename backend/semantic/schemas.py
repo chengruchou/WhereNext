@@ -38,6 +38,11 @@ class CandidatePOI:
     semantic_score: float = 0.0
     final_score: float = 0.0
     prompts: MultiViewPrompts | None = None
+    descriptions: dict[str, Any] | None = None
+    description_backend: str | None = None
+    llm_rank: int | None = None
+    llm_rank_score: float = 0.0
+    rerank_source: str | None = None
 
 
 @dataclass
@@ -57,4 +62,3 @@ class RerankResult:
     predictions: list[dict[str, Any]]
     used_semantic_reranker: bool
     debug: dict[str, Any] = field(default_factory=dict)
-
