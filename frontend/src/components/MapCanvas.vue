@@ -2,6 +2,7 @@
   import { ref, onMounted, computed, watch } from "vue"
   import type { GowallaPlace } from "@/types/place"
   import { GoogleMap, AdvancedMarker } from "vue3-google-map"
+  import DrawRoute from "./DrawRoute.vue"
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const props = defineProps<{
     showSearch: GowallaPlace[]
@@ -56,6 +57,7 @@
     style="width: 100%; height: 100%"
     :center="center"
     :zoom="15">
+    <DrawRoute :user-hist="props.userHist" />
     <span v-for="e in props.userHist">
       <AdvancedMarker
         :options="{

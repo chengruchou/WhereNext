@@ -1,10 +1,10 @@
+from database import db
 from flask import Flask
 from flask_cors import CORS
-
-from database import db
 from routes.model_api import model_bp
-from routes.user_api import user_bp
 from routes.poi_api import poi_bp
+from routes.route_api import route_bp
+from routes.user_api import user_bp
 
 app = Flask(__name__)
 CORS(app)
@@ -19,6 +19,7 @@ with app.app_context():
 app.register_blueprint(user_bp)
 app.register_blueprint(model_bp)
 app.register_blueprint(poi_bp)
+app.register_blueprint(route_bp)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
