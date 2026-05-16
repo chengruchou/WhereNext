@@ -15,7 +15,7 @@
     async (newSeq, oldSeq) => {
       try {
         console.log("fetch route ", newSeq)
-        const res = (await api.post("/route/", newSeq.slice(-10))).data
+        const res = (await api.post("/route/", newSeq)).data
         console.log("route resp ", res)
         const decodedTuple = decode(res.polyline.encodedPolyline)
         routePath.value = decodedTuple.map((point) => ({ lat: point[0], lng: point[1] }))

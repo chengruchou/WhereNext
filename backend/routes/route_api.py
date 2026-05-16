@@ -34,8 +34,6 @@ def get_route():
             }
         }
     
-    rq = rq.reverse()
-
     origin = to_waypoint(rq[0])
     destination = to_waypoint(rq[-1])
     intermediates = [to_waypoint(e) for e in rq[1:-1]]

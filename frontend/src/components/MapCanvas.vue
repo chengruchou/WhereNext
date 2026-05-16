@@ -15,8 +15,8 @@
   const updateCenter = (newList: GowallaPlace[]) => {
     if (newList && newList.length > 0) {
       center.value = {
-        lat: newList[0].latitude,
-        lng: newList[0].longitude,
+        lat: newList[newList.length-1].latitude,
+        lng: newList[newList.length-1].longitude,
       }
     }
   }
@@ -58,13 +58,17 @@
     :center="center"
     :zoom="15">
     <DrawRoute :user-hist="props.userHist" />
-    <span v-for="e in props.userHist">
+    <span v-for="(e, index) in props.userHist" :key="e.raw_poi_id">
       <AdvancedMarker
         :options="{
           position: { lat: e.latitude, lng: e.longitude },
-          title: String(e.raw_poi_id + ' ' + e.category_name),
+          title: String(index + '. ' + e.raw_poi_id + ' ' + e.category_name),
         }"
-        :pinOptions="{ background: 'cyan' }">
+        :pinOptions="{
+          background: 'cyan',
+          glyph: String(index + 1),
+          glyphColor: 'black',
+        }">
       </AdvancedMarker>
     </span>
     <span v-for="e in props.showSearch">

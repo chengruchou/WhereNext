@@ -8,10 +8,21 @@ user_bp = Blueprint("user", __name__, url_prefix="/api/user")
 
 @user_bp.route("/<int:user_id>", methods=["GET"])
 def fetch(user_id):
-    data = UserHist.query.filter(UserHist.user_id==user_id).all()
+    data = (
+        UserHist.query.filter(UserHist.user_id == user_id)
+        .order_by(UserHist.visit_time.desc())
+        .limit(10)
+        .all()
+    )
     if data is None:
         return jsonify(None)
-    return jsonify({"userHist": [e.to_dict() for e in data], "userHistPlace": [e.to_dict()["poi_detail"] for e in data]})
+    data = data[::-1]
+    return jsonify(
+        {
+            "userHist": [e.to_dict() for e in data],
+            "userHistPlace": [e.to_dict()["poi_detail"] for e in data],
+        }
+    )
 
 
 @user_bp.route("/<int:user_id>", methods=["POST"])
@@ -27,12 +38,14 @@ def add(user_id):
     db.session.commit()
     return jsonify("write succeed")
 
+
 @user_bp.route("/<int:user_id>", methods=["DELETE"])
 def delete(user_id):
     UserHist.query.filter(UserHist.user_id == user_id).delete()
     db.session.commit()
 
     return jsonify("delete succeed")
+
 
 @user_bp.route("delone/<int:log_id>", methods=["DELETE"])
 def delete_one(log_id):
