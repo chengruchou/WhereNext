@@ -52,5 +52,7 @@ tmp.ipynb
 backend/eval/outputs/
 
 # uv files
-uv.lock
+# uv.lock
 uv.log
+
+/backend/tests

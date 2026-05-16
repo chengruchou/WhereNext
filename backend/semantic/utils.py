@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import math
+import os
+import time
 from typing import Any
 
 import numpy as np
+import requests
 
 
 def safe_float(value: Any) -> float | None:
@@ -41,9 +45,15 @@ def infer_usage_tendency(poi_metadata: dict[str, Any]) -> str:
     users = safe_float(poi_metadata.get("users_count")) or 0.0
     events = safe_float(poi_metadata.get("checkins_count_from_events")) or 0.0
 
-    if any(keyword in category for keyword in ["coffee", "cafe", "restaurant", "bar", "food"]):
+    if any(
+        keyword in category
+        for keyword in ["coffee", "cafe", "restaurant", "bar", "food"]
+    ):
         return "repeat casual visits and social gathering"
-    if any(keyword in category for keyword in ["office", "hall", "school", "university", "airport"]):
+    if any(
+        keyword in category
+        for keyword in ["office", "hall", "school", "university", "airport"]
+    ):
         return "purpose-driven visits with functional intent"
     if checkins > 1000 or users > 500:
         return "high-traffic destination with broad appeal"
@@ -125,7 +135,11 @@ def average_vectors(vectors: list[np.ndarray]) -> np.ndarray | None:
 def rank_predictions_by_raw_id(predictions: list[dict[str, Any]]) -> list[int]:
     """Return raw ids in their current prediction order."""
 
-    return [int(pred["raw_location_id"]) for pred in predictions if "raw_location_id" in pred]
+    return [
+        int(pred["raw_location_id"])
+        for pred in predictions
+        if "raw_location_id" in pred
+    ]
 
 
 def run_mock_rerank_demo() -> dict[str, Any]:
@@ -140,18 +154,101 @@ def run_mock_rerank_demo() -> dict[str, Any]:
             item_id=1,
             score=0.90,
             raw_location_id=101,
-            poi_metadata={"raw_poi_id": 101, "category_name": "Coffee Shop", "checkins_count": 500, "users_count": 120, "latitude": 25.03, "longitude": 121.56},
+            poi_metadata={
+                "raw_poi_id": 101,
+                "category_name": "Coffee Shop",
+                "checkins_count": 500,
+                "users_count": 120,
+                "latitude": 25.03,
+                "longitude": 121.56,
+            },
         ),
         CandidatePOI(
             rank=2,
             item_id=2,
             score=0.85,
             raw_location_id=102,
-            poi_metadata={"raw_poi_id": 102, "category_name": "City Hall", "checkins_count": 200, "users_count": 80, "latitude": 25.04, "longitude": 121.53},
+            poi_metadata={
+                "raw_poi_id": 102,
+                "category_name": "City Hall",
+                "checkins_count": 200,
+                "users_count": 80,
+                "latitude": 25.04,
+                "longitude": 121.53,
+            },
         ),
     ]
     history_metadata = [
-        {"raw_poi_id": 201, "category_name": "Coffee Shop", "checkins_count": 400, "users_count": 100, "latitude": 25.05, "longitude": 121.55}
+        {
+            "raw_poi_id": 201,
+            "category_name": "Coffee Shop",
+            "checkins_count": 400,
+            "users_count": 100,
+            "latitude": 25.05,
+            "longitude": 121.55,
+        }
     ]
-    return rerank_packaged_candidates(user_id=999, candidates=candidates, history_poi_metadata=history_metadata)
+    return rerank_packaged_candidates(
+        user_id=999, candidates=candidates, history_poi_metadata=history_metadata
+    )
 
+
+OSM_CACHE_FILE = os.path.join(os.path.dirname(__file__), "osm_cache.json")
+
+if os.path.exists(OSM_CACHE_FILE):
+    with open(OSM_CACHE_FILE, "r", encoding="utf-8") as f:
+        _osm_cache = json.load(f)
+else:
+    _osm_cache = {}
+
+
+def save_osm_cache():
+    """write cache"""
+    with open(OSM_CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(_osm_cache, f, ensure_ascii=False, indent=2)
+
+
+def fetch_osm_data(lat: float | None, lng: float | None) -> dict:
+    """Fetch street-level data with Local File Caching."""
+    if lat is None or lng is None:
+        return {}
+
+    cache_key = f"{round(lat, 5)}_{round(lng, 5)}"
+
+    if cache_key in _osm_cache:
+        return _osm_cache[cache_key]
+
+    try:
+        url = f"https://nominatim.openstreetmap.org/reverse?format=json&lat={lat}&lon={lng}&zoom=16"
+        headers = {"User-Agent": "POI_system_semantic_reranker/1.0 (sses3205@gmail.com)"}
+        resp = requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+        _osm_cache[cache_key] = data
+        save_osm_cache()
+        time.sleep(1.1)
+        return data
+
+    except requests.exceptions.RequestException as e:
+        print(f"[Semantic Utils] OSM API request failed for {cache_key}: {e}")
+        return {}
+
+
+def format_osm_context(osm_data: dict) -> dict:
+    """Extract all safe geographic features and return as a structured dictionary."""
+    if not osm_data:
+        return {}
+
+    addr = osm_data.get("address", {})
+    context_dict = {
+        "road": addr.get("road", ""),
+        "retail": addr.get("retail", ""),
+        "neighbourhood": addr.get("neighbourhood", addr.get("quarter", "")),
+        "suburb": addr.get("suburb", ""),
+        "city": addr.get("city", addr.get("town", addr.get("hamlet", ""))),
+        "county": addr.get("county", ""),
+        "state": addr.get("state", ""),
+        "country": addr.get("country", ""),
+    }
+
+    return {k: v for k, v in context_dict.items() if v}

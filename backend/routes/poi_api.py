@@ -1,6 +1,10 @@
+import sys
+
 from database import POI, db
 from flask import Blueprint, jsonify, request
-from model_core.semantic_extractor_template import extract_semantic
+
+PYTHON_EXE = sys.executable
+from semantic.semantic_extractor import extract_semantic
 
 poi_bp = Blueprint("poi", __name__, url_prefix="/api/poi")
 

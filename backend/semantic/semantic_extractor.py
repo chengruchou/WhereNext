@@ -10,11 +10,7 @@ rq.headers.update({"User-Agent": "POI_system"})
 
 warnings.filterwarnings("ignore")
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
-if parent_dir not in sys.path:
-    sys.path.append(parent_dir)
-
+PYTHON_EXE = sys.executable
 from database import POI
 
 

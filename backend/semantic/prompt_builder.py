@@ -26,6 +26,8 @@ from .utils import (
     infer_usage_tendency,
     safe_float,
     simple_region_summary,
+    fetch_osm_data, 
+    format_osm_context
 )
 
 
@@ -55,6 +57,11 @@ def build_visit_prompt(poi_metadata: dict) -> str:
         f"event users={describe_count_band(event_users)}. "
         f"Inferred usage tendency: {usage_tendency}."
     )
+    # return (
+    #     f"category: {category}, checkins: {describe_count_band(checkins)}, "
+    #     f"users: {describe_count_band(users)}, event_checkins: {describe_count_band(event_checkins)}, "
+    #     f"event_users: {describe_count_band(event_users)}, usage: {usage_tendency}"
+    # )
 
 
 def build_location_prompt(poi_metadata: dict) -> str:
@@ -64,7 +71,6 @@ def build_location_prompt(poi_metadata: dict) -> str:
     - Prompt generation for address/location semantics
     - Adapted here using category + lat/lng + simple region-like summary
     """
-
     category = poi_metadata.get("category_name") or "Unknown category"
     lat = safe_float(
         poi_metadata.get("latitude", poi_metadata.get("spot_latitude", poi_metadata.get("lat")))
@@ -78,11 +84,32 @@ def build_location_prompt(poi_metadata: dict) -> str:
     if lat is not None and lng is not None:
         coord_text = f"latitude={lat:.5f}, longitude={lng:.5f}"
 
-    return (
-        f"Address/location view. This POI is a {category}. "
-        f"Location summary: {coord_text}. "
-        f"Region-like descriptor: {region}."
-    )
+    # return (
+    #     f"Address/location view. This POI is a {category}. "
+    #     f"Location summary: {coord_text}. "
+    #     f"Region-like descriptor: {region}."
+    # )
+
+    category = poi_metadata.get("category_name") or "Unknown category"
+    lat = safe_float(poi_metadata.get("latitude") or poi_metadata.get("spot_latitude") or poi_metadata.get("lat"))
+    lng = safe_float(poi_metadata.get("longitude") or poi_metadata.get("spot_longitude") or poi_metadata.get("lng"))
+    
+    osm_data = fetch_osm_data(lat, lng)
+    macro_area_dict = format_osm_context(osm_data)
+    selected_components = [
+        macro_area_dict.get("road"),
+        macro_area_dict.get("retail"),
+        macro_area_dict.get("neighbourhood"),
+        macro_area_dict.get("suburb"),
+        macro_area_dict.get("city"),
+        macro_area_dict.get("state"),
+        macro_area_dict.get("country")
+    ]
+    valid_components = [str(c) for c in selected_components if c]
+    area_str = ", ".join(valid_components) if valid_components else "unknown area"
+    # return f"category: {category}, area: {area_str}"
+    return f"category: {category}, location: {coord_text}, region: {region}, area: {area_str}"
+
 
 
 def build_category_prompt(poi_metadata: dict) -> str:
@@ -108,6 +135,11 @@ def build_category_prompt(poi_metadata: dict) -> str:
         f"highlights={describe_count_band(highlights)}, "
         f"items={describe_count_band(items)}."
     )
+    # return (
+    #     f"category: {category}, descriptors: {category_descriptors}, "
+    #     f"radius: {describe_count_band(radius)}, photos: {describe_count_band(photos)}, "
+    #     f"highlights: {describe_count_band(highlights)}, items: {describe_count_band(items)}"
+    # )
 
 
 def build_views(poi_metadata: dict) -> MultiViewPrompts:
