@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 from dotenv import load_dotenv
@@ -33,18 +35,28 @@ def get_route():
                 }
             }
         }
-    
-    origin = to_waypoint(rq[0])
-    destination = to_waypoint(rq[-1])
-    intermediates = [to_waypoint(e) for e in rq[1:-1]]
+
+    points = rq["points"]
+    time = rq["time"]
+    type = rq["type"]
+    time_utc = datetime.fromisoformat(time.replace("Z", "+00:00"))
+    time_taiwan = time_utc.astimezone(ZoneInfo("Asia/Taipei")) + timedelta(minutes=1)
+    time_str = time_taiwan.isoformat()
+
+    origin = to_waypoint(points[0])
+    destination = to_waypoint(points[-1])
+    intermediates = [to_waypoint(e) for e in points[1:-1]]
 
     payload = {
         "origin": origin,
         "destination": destination,
-        "intermediates": intermediates,
-        "travelMode": "WALK",
+        "travelMode": type,
         "polylineEncoding": "ENCODED_POLYLINE",
+        "departureTime": time_str,
     }
+
+    if type != "TRANSIT":
+        payload["intermediates"] = intermediates
 
     headers = {
         "Content-Type": "application/json",
@@ -62,4 +74,28 @@ def get_route():
         .json()
     )
 
-    return jsonify(resp["routes"][0])
+    no_route = not resp or "routes" not in resp
+
+    if no_route:
+        payload["travelMode"] = "WALK"
+        resp = (
+            requests.session()
+            .post(
+                "https://routes.googleapis.com/directions/v2:computeRoutes",
+                json=payload,
+                headers=headers,
+            )
+            .json()
+        )
+        if not resp or "routes" not in resp:
+            return jsonify({"message": "Fail to fetch route", "route": None})
+        else:
+            return jsonify(
+                {
+                    "message": "Fail to fetch route for Transit mode, fallback to walking mode",
+                    "route": resp["routes"][0],
+                }
+            )
+
+    else:
+        return jsonify({"message": "success", "route": resp["routes"][0]})

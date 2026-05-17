@@ -21,22 +21,30 @@
   const histPath = ref<PathInfo | null>(null)
   const recPath = ref<PathInfo | null>(null)
 
-  const fetchRoutePath = async (points: GowallaPlace[]): Promise<PathInfo | null> => {
+  const fetchRoutePath = async (points: GowallaPlace[], type: string): Promise<PathInfo | null> => {
     if (!points || points.length < 2) return null
 
     try {
       console.log("fetch route ", points)
-      const res = (await api.post("/route/", points)).data
-
-      const encodedPolyline = res.polyline.encodedPolyline
+      const time = new Date().toISOString()
+      const res = (await api.post("/route/", { points: points, time: time, type: type })).data
+      const route = res["route"]
+      const message = res["message"]
+      if (message !== "success") {
+        alert(message)
+        if (!route) {
+          return null
+        }
+      }
+      const encodedPolyline = route.polyline.encodedPolyline
       const decodedTuple = decode(encodedPolyline)
       const path = decodedTuple.map((point) => ({ lat: point[0], lng: point[1] }))
 
       if (path.length === 0) return null
 
-      const midPoint = path[Math.floor(path.length/2)]
+      const midPoint = path[Math.floor(path.length / 2)]
 
-      return { path, midPoint, duration: res.duration, distance: res.distanceMeters }
+      return { path, midPoint, duration: route.duration, distance: route.distanceMeters }
     } catch (error) {
       console.error(error)
       return null
@@ -46,7 +54,7 @@
   watch(
     () => props.userHist,
     async (newSeq) => {
-      histPath.value = await fetchRoutePath(newSeq)
+      histPath.value = await fetchRoutePath(newSeq, "WALK")
     },
     { deep: true },
   )
@@ -55,7 +63,7 @@
     () => props.showRecommend,
     async (newSeq) => {
       const lastVisit = props.userHist[props.userHist.length - 1]
-      recPath.value = await fetchRoutePath([lastVisit, newSeq[0]])
+      recPath.value = await fetchRoutePath([lastVisit, newSeq[0]], "TRANSIT")
     },
     { deep: true },
   )
@@ -84,7 +92,7 @@
       :options="{ position: histPath.midPoint, headerDisabled: true }">
       <div style="color: #202124; font-size: 12px; font-weight: 500">
         Duration: {{ histPath.duration }}<br />
-        Distance: {{ histPath.distance }}
+        Distance: {{ histPath.distance }}m
       </div>
     </InfoWindow>
   </template>
@@ -106,7 +114,7 @@
         strokeWeight: 8,
         zIndex: 2,
       }" />
-      <InfoWindow
+    <InfoWindow
       v-if="recPath.midPoint"
       :options="{ position: recPath.midPoint, headerDisabled: true }">
       <div style="color: #202124; font-size: 12px; font-weight: 500">
