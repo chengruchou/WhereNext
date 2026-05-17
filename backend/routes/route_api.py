@@ -61,7 +61,7 @@ def get_route():
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.viewport",
     }
 
     resp = (
@@ -73,6 +73,7 @@ def get_route():
         )
         .json()
     )
+    # print(resp)
 
     no_route = not resp or "routes" not in resp
 

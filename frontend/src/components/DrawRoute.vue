@@ -13,16 +13,22 @@
   }
 
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
-  const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const props = defineProps<{
-    userHist: GowallaPlace[]
-    showRecommend: GowallaPlace[]
+    points: GowallaPlace[]
+    type: string
   }>()
-  const histPath = ref<PathInfo | null>(null)
-  const recPath = ref<PathInfo | null>(null)
+
+  const emit = defineEmits<{
+    (e: "submit-view-port", paylaod: { passViewPort: any }): void
+  }>()
+
+  const showPath = ref<PathInfo | null>(null)
 
   const fetchRoutePath = async (points: GowallaPlace[], type: string): Promise<PathInfo | null> => {
-    if (!points || points.length < 2) return null
+    console.log("points : ", points)
+    if (!points || points.length < 2 || !points[0] || !points[1]) {
+      return null
+    }
 
     try {
       console.log("fetch route ", points)
@@ -40,9 +46,13 @@
       const decodedTuple = decode(encodedPolyline)
       const path = decodedTuple.map((point) => ({ lat: point[0], lng: point[1] }))
 
-      if (path.length === 0) return null
+      if (path.length === 0) {
+        return null
+      }
 
       const midPoint = path[Math.floor(path.length / 2)]
+
+      emit("submit-view-port", { passViewPort: route.viewport })
 
       return { path, midPoint, duration: route.duration, distance: route.distanceMeters }
     } catch (error) {
@@ -52,74 +62,38 @@
   }
 
   watch(
-    () => props.userHist,
+    () => props.points,
     async (newSeq) => {
-      histPath.value = await fetchRoutePath(newSeq, "WALK")
+      showPath.value = await fetchRoutePath(newSeq, props.type === "hist" ? "WALK" : "TRANSIT")
     },
-    { deep: true },
-  )
-
-  watch(
-    () => props.showRecommend,
-    async (newSeq) => {
-      const lastVisit = props.userHist[props.userHist.length - 1]
-      recPath.value = await fetchRoutePath([lastVisit, newSeq[0]], "TRANSIT")
-    },
-    { deep: true },
+    { deep: true, immediate: true },
   )
 </script>
 
 <template>
-  <template v-if="histPath && histPath.path.length > 0">
+  <template v-if="showPath && showPath.path.length > 0">
     <Polyline
       :options="{
-        path: histPath.path,
-        strokeColor: 'Black',
+        path: showPath.path,
+        strokeColor: props.type === 'hist' ? 'black' : '#470DFA',
         strokeOpacity: 1,
         strokeWeight: 11,
         zIndex: 1,
       }" />
     <Polyline
       :options="{
-        path: histPath.path,
-        strokeColor: '#470DFA',
+        path: showPath.path,
+        strokeColor: props.type === 'hist' ? '#470DFA' : '#B6C8FF',
         strokeOpacity: 1,
         strokeWeight: 8,
         zIndex: 2,
       }" />
     <InfoWindow
-      v-if="histPath.midPoint"
-      :options="{ position: histPath.midPoint, headerDisabled: true }">
+      v-if="showPath.midPoint"
+      :options="{ position: showPath.midPoint, headerDisabled: true }">
       <div style="color: #202124; font-size: 12px; font-weight: 500">
-        Duration: {{ histPath.duration }}<br />
-        Distance: {{ histPath.distance }}m
-      </div>
-    </InfoWindow>
-  </template>
-
-  <template v-if="recPath && recPath.path.length > 0">
-    <Polyline
-      :options="{
-        path: recPath.path,
-        strokeColor: '#470DFA',
-        strokeOpacity: 1,
-        strokeWeight: 11,
-        zIndex: 1,
-      }" />
-    <Polyline
-      :options="{
-        path: recPath.path,
-        strokeColor: '#B6C8FF',
-        strokeOpacity: 1,
-        strokeWeight: 8,
-        zIndex: 2,
-      }" />
-    <InfoWindow
-      v-if="recPath.midPoint"
-      :options="{ position: recPath.midPoint, headerDisabled: true }">
-      <div style="color: #202124; font-size: 12px; font-weight: 500">
-        Duration: {{ recPath.duration }}<br />
-        Distance: {{ recPath.distance }}m
+        Duration: {{ showPath.duration }}<br />
+        Distance: {{ showPath.distance }}m
       </div>
     </InfoWindow>
   </template>
