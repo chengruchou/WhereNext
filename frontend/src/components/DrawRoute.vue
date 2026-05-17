@@ -18,10 +18,6 @@
     type: string
   }>()
 
-  const emit = defineEmits<{
-    (e: "submit-view-port", paylaod: { passViewPort: any }): void
-  }>()
-
   const showPath = ref<PathInfo | null>(null)
 
   const fetchRoutePath = async (points: GowallaPlace[], type: string): Promise<PathInfo | null> => {
@@ -51,8 +47,6 @@
       }
 
       const midPoint = path[Math.floor(path.length / 2)]
-
-      emit("submit-view-port", { passViewPort: route.viewport })
 
       return { path, midPoint, duration: route.duration, distance: route.distanceMeters }
     } catch (error) {
