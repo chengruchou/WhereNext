@@ -15,8 +15,8 @@
   const updateCenter = (newList: GowallaPlace[]) => {
     if (newList && newList.length > 0) {
       center.value = {
-        lat: newList[newList.length-1].latitude,
-        lng: newList[newList.length-1].longitude,
+        lat: newList[newList.length - 1].latitude,
+        lng: newList[newList.length - 1].longitude,
       }
     }
   }
@@ -57,18 +57,14 @@
     style="width: 100%; height: 100%"
     :center="center"
     :zoom="15">
-    <DrawRoute :user-hist="props.userHist" />
+    <DrawRoute :user-hist="props.userHist" :show-recommend="props.showRecommend" />
     <span v-for="(e, index) in props.userHist" :key="e.raw_poi_id">
       <AdvancedMarker
         :options="{
           position: { lat: e.latitude, lng: e.longitude },
-          title: String(index + '. ' + e.raw_poi_id + ' ' + e.category_name),
+          title: String(index + 1 + '. ' + e.raw_poi_id + ' ' + e.category_name),
         }"
-        :pinOptions="{
-          background: 'cyan',
-          glyph: String(index + 1),
-          glyphColor: 'black',
-        }">
+        :pinOptions="{ background: 'cyan', glyphText: String(index + 1), glyphColor: 'black' }">
       </AdvancedMarker>
     </span>
     <span v-for="e in props.showSearch">
@@ -80,13 +76,13 @@
         :pinOptions="{ background: 'orange' }">
       </AdvancedMarker>
     </span>
-    <span v-for="e in props.showRecommend">
+    <span v-for="(e, index) in props.showRecommend">
       <AdvancedMarker
         :options="{
           position: { lat: e.latitude, lng: e.longitude },
-          title: String(e.raw_poi_id + ' ' + e.category_name),
+          title: String(index + 1 + '. ' + e.raw_poi_id + ' ' + e.category_name),
         }"
-        :pinOptions="{ background: 'blue' }">
+        :pinOptions="{ background: 'yellow', glyphText: String(index + 1), glyphColor: 'black' }">
       </AdvancedMarker>
     </span>
   </GoogleMap>

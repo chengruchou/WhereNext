@@ -104,7 +104,7 @@
         noSearchRes.value = true
       }
     } catch (error) {
-      console.log(error)
+      alert(error)
     }
   }
 
@@ -120,7 +120,7 @@
         noSearchRes.value = true
       }
     } catch (error) {
-      console.log(error)
+      alert(error)
     }
   }
 

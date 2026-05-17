@@ -56,3 +56,5 @@ backend/eval/outputs/
 uv.log
 
 /backend/tests
+frontend/package-lock.json
+frontend/package.json
