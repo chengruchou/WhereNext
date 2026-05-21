@@ -42,6 +42,7 @@
 
   const fetchUserHistory = async (payload: { passUserId: number | null }) => {
     try {
+      showRecommend.value = []
       if (payload.passUserId || payload.passUserId === 0) {
         console.log("search user ", payload.passUserId)
         userId.value = payload.passUserId

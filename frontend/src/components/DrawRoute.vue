@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-  import { ref, watch } from "vue"
+  import { ref, watch, computed } from "vue"
   import type { GowallaPlace } from "@/types/place"
   import { decode } from "@googlemaps/polyline-codec"
   import { Polyline, InfoWindow } from "vue3-google-map"
@@ -8,8 +8,9 @@
   interface PathInfo {
     path: { lat: number; lng: number }[]
     midPoint: { lat: number; lng: number } | null
-    duration: string | null
-    distance: string | null
+    duration: string
+    distance: number
+    type: string
   }
 
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
@@ -19,6 +20,7 @@
   }>()
 
   const showPath = ref<PathInfo | null>(null)
+  const closeRoute = ref(false)
 
   const fetchRoutePath = async (points: GowallaPlace[], type: string): Promise<PathInfo | null> => {
     console.log("points : ", points)
@@ -36,6 +38,8 @@
         alert(message)
         if (!route) {
           return null
+        } else {
+          type = "WALK"
         }
       }
       const encodedPolyline = route.polyline.encodedPolyline
@@ -48,20 +52,55 @@
 
       const midPoint = path[Math.floor(path.length / 2)]
 
-      return { path, midPoint, duration: route.duration, distance: route.distanceMeters }
+      return {
+        path,
+        midPoint,
+        duration: route.duration,
+        distance: route.distanceMeters,
+        type: type,
+      }
     } catch (error) {
       console.error(error)
       return null
     }
   }
 
+  const propsPointStr = computed(() => {
+    if (!props.points) {
+      return []
+    }
+    return props.points.map((p) => p?.raw_poi_id).join(",")
+  })
+
   watch(
-    () => props.points,
+    () => propsPointStr,
     async (newSeq) => {
-      showPath.value = await fetchRoutePath(newSeq, props.type === "hist" ? "WALK" : "TRANSIT")
+      showPath.value = await fetchRoutePath(
+        props.points,
+        props.type === "hist" ? "WALK" : "TRANSIT",
+      )
     },
     { deep: true, immediate: true },
   )
+
+  const formatTime = (time: string | null) => {
+    if (!time) {
+      return ""
+    }
+    const sec = Number(time.slice(0, time.length - 1))
+    const min = Math.floor(sec / 60)
+    const hour = Math.floor(min / 60)
+    const day = Math.floor(hour / 24)
+    if (day > 0) {
+      return day + " day"
+    }
+    if (hour > 0) {
+      return hour + " hr " + (min % 60 === 0 ? "" : (min % 60) + " min")
+    }
+    return (
+      (min % 60 === 0 ? "" : (min % 60) + " min ") + (sec % 60 === 0 ? "" : (sec % 60) + " sec")
+    )
+  }
 </script>
 
 <template>
@@ -83,11 +122,32 @@
         zIndex: 2,
       }" />
     <InfoWindow
-      v-if="showPath.midPoint"
+      v-if="showPath.midPoint && showPath.duration !== '0s' && !closeRoute"
       :options="{ position: showPath.midPoint, headerDisabled: true }">
-      <div style="color: #202124; font-size: 12px; font-weight: 500">
-        Duration: {{ showPath.duration }}<br />
-        Distance: {{ showPath.distance }}m
+      <div
+        style="
+          color: black;
+          font-size: 12px;
+          font-weight: 500;
+          display: flex;
+          gap: 5px;
+          align-items: center;
+        ">
+        <v-icon :icon="showPath.type == 'WALK' ? 'mdi-walk' : 'mdi-bus-multiple'" size="25" />
+        <div>
+          {{ formatTime(showPath.duration) }}<br />
+          {{
+            showPath.distance > 1000
+              ? (showPath.distance / 1000).toFixed(2) + " km "
+              : showPath.distance + " m "
+          }}
+        </div>
+        <v-btn
+          icon="mdi-close-box"
+          size="10"
+          class="mx-1"
+          variant="text"
+          @click="closeRoute = true" />
       </div>
     </InfoWindow>
   </template>
