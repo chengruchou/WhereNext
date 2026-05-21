@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-  import { ref, onMounted, computed, watch, onUnmounted } from "vue"
+  import { ref, onMounted, computed, watch, onUnmounted, nextTick } from "vue"
   import axios from "axios"
   import UserLogin from "./components/UserLogin.vue"
   import HistoryList from "./components/HistoryList.vue"
@@ -137,7 +137,9 @@
     }
   }
 
-  const handleFocusPlace = (payload: { focusPlace: GowallaPlace | null }) => {
+  const handleFocusPlace = async (payload: { focusPlace: GowallaPlace | null }) => {
+    focusedPlace.value = null
+    await nextTick()
     focusedPlace.value = payload.focusPlace
   }
 </script>
@@ -219,7 +221,8 @@
         :show-recommend="showRecommend"
         :show-search="showSearch"
         :user-hist="userHistPlace"
-        :focused-place="focusedPlace" />
+        :focused-place="focusedPlace"
+        @submit-add-history="addUserHistory" />
     </v-main>
   </v-app>
 </template>
