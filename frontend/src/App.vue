@@ -18,6 +18,7 @@
   const isInferring = ref(false)
   const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
   const focusedPlace = ref<GowallaPlace | null>(null)
+  const drawer = ref(true)
 
   const allCat = ref([])
 
@@ -144,10 +145,13 @@
 <template>
   <v-app>
     <v-app-bar title="POI" color="secondary" density="compact">
+      <template v-slot:prepend>
+        <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
+      </template>
       {{ currentTime }}<v-spacer> </v-spacer>
     </v-app-bar>
 
-    <v-navigation-drawer permanent width="600">
+    <v-navigation-drawer v-model="drawer" permanent width="600">
       <v-row class="fill-height ma-0">
         <v-col cols="6" class="d-flex flex-column h-100 border-e pa-3 pb-0">
           <div class="flex-shrink-0 d-flex flex-column">

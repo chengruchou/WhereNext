@@ -1,7 +1,9 @@
 <script lang="ts" setup>
   import { ref, onMounted, computed, watch } from "vue"
+  import { VIconBtn } from "vuetify/labs/VIconBtn"
   import type { GowallaPlace } from "@/types/place"
   const props = defineProps<{ place: GowallaPlace | null; showAdd: Boolean; index: number }>()
+  const expand = ref(false)
   const emit = defineEmits<{
     (e: "submit-add-history", payload: { passPlace: GowallaPlace | null }): void
     (e: "focus-place", payload: { focusPlace: GowallaPlace | null }): void
@@ -24,7 +26,7 @@
 <template>
   <v-card
     v-if="props.place"
-    class="ma-4"
+    class="mx-1 my-2"
     elevation="4"
     variant="outlined"
     color="warning"
@@ -43,18 +45,36 @@
 
     <v-divider class="mx-4"></v-divider>
 
-    <v-card-text class="pt-3 pb-2">
+    <v-card-text class="pt-3 pb-0">
       <div class="text-caption text-grey">
         <div class="font-weight-medium mb-1">Coordinates:</div>
         <div>({{ props.place.latitude.toFixed(4) }}, {{ props.place.longitude.toFixed(4) }})</div>
       </div>
     </v-card-text>
 
-    <v-card-actions v-if="showAdd" class="px-4 pb-4">
-      <v-btn variant="flat" color="warning" block @click.stop="addHistory"> Add to User History </v-btn>
+    <v-card-actions style="min-height: 0">
+      <v-btn @click.stop="expand = !expand" block density="compact">
+        <v-icon-btn
+          :rotate="expand ? 180 : 0"
+          icon="$dropdown"
+          size="16"
+          variant="plain"
+          hide-overlay></v-icon-btn>
+      </v-btn>
     </v-card-actions>
-    <v-card-actions class="px-4 pb-4">
-      <v-btn variant="tonal" color="info" block @click.stop="openDetail"> Show Detail </v-btn>
-    </v-card-actions>
+
+    <v-expand-transition v-show="expand">
+      <div>
+        <v-card-actions v-if="showAdd" class="px-4 pb-2">
+          <v-btn variant="flat" color="warning" block @click.stop="addHistory">
+            Add to User History
+          </v-btn>
+        </v-card-actions>
+
+        <v-card-actions class="px-4 pt-0 pb-2">
+          <v-btn variant="tonal" color="info" block @click.stop="openDetail"> Show Detail </v-btn>
+        </v-card-actions>
+      </div>
+    </v-expand-transition>
   </v-card>
 </template>
