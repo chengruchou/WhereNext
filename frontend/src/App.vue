@@ -6,6 +6,7 @@
   import MapCanvas from "./components/MapCanvas.vue"
   import SearchPanel from "./components/SearchPanel.vue"
   import PlaceCard from "./components/PlaceCard.vue"
+  import ChatPanel from "./components/ChatPanel.vue"
   import type { GowallaPlace, UserHistory } from "./types/place"
 
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
@@ -19,6 +20,8 @@
   const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
   const focusedPlace = ref<GowallaPlace | null>(null)
   const drawer = ref(true)
+  const showStr = ref("")
+  const isExplaining = ref(false)
 
   const allCat = ref([])
 
@@ -143,6 +146,19 @@
     await nextTick()
     focusedPlace.value = payload.focusPlace
   }
+
+  const getExplanation = async () => {
+    try {
+      isExplaining.value = true
+      const res = (
+        await api.post("/chat/explain", { hists: userHistPlace.value, recs: showRecommend.value })
+      ).data
+      showStr.value = res
+      isExplaining.value = false
+    } catch (error) {
+      alert(error)
+    }
+  }
 </script>
 
 <template>
@@ -224,6 +240,7 @@
         :user-hist="userHistPlace"
         :focused-place="focusedPlace"
         @submit-add-history="addUserHistory" />
+      <ChatPanel :show-str="showStr" :is-explaining="isExplaining" @generate-explanation="getExplanation" />
     </v-main>
   </v-app>
 </template>
