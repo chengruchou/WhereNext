@@ -5,7 +5,8 @@ from routes.model_api import model_bp
 from routes.poi_api import poi_bp
 from routes.route_api import route_bp
 from routes.user_api import user_bp
-from routes.chat_api import chat_bp
+# from routes.chat_api import chat_bp
+from routes.chat_api_multi import chat_bp
 
 app = Flask(__name__)
 CORS(app)

@@ -2,17 +2,22 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime, timedelta
 
 PYTHON_EXE = sys.executable
 from database import POI, UserHist
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from semantic import rerank_predictions_for_user
 
 model_bp = Blueprint("model", __name__, url_prefix="/api/model")
 
 
-@model_bp.route("/genpoi/<int:user_id>", methods=["GET"])
+@model_bp.route("/genpoi/<int:user_id>", methods=["POST"])
 def gen_poi(user_id):
+    rq = request.json
+
+    append_back = rq.get("append_back", [])
+
     histories = (
         UserHist.query.filter_by(user_id=user_id).order_by(UserHist.visit_time).all()
     )
@@ -23,6 +28,8 @@ def gen_poi(user_id):
     temp_txt = f"datasets/temp_visit_{user_id}.txt"
     temp_out = f"datasets/temp_out_{user_id}.json"
 
+    print("append_back", append_back)
+
     try:
         with open(temp_txt, "w", encoding="utf-8") as f:
             for h in histories:
@@ -31,6 +38,16 @@ def gen_poi(user_id):
                     continue
 
                 t_str = h.visit_time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                f.write(f"{user_id} {t_str} {poi.lat} {poi.lng} {poi.id}\n")
+
+
+            for idx, poi_id in enumerate(append_back):
+                poi = POI.query.get(poi_id)
+                if not poi:
+                    continue
+                
+                virtual_time = histories[-1].visit_time + timedelta(hours=idx + 1)
+                t_str = virtual_time.strftime("%Y-%m-%dT%H:%M:%SZ")
                 f.write(f"{user_id} {t_str} {poi.lat} {poi.lng} {poi.id}\n")
 
         cmd = [

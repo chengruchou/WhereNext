@@ -8,7 +8,8 @@
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
   const props = defineProps<{
     showSearch: GowallaPlace[]
-    showRecommend: GowallaPlace[]
+    showRecommend: GowallaPlace[][]
+    nowRecRound: number
     userHist: GowallaPlace[]
     focusedPlace: GowallaPlace | null
   }>()
@@ -31,12 +32,36 @@
   const addHistory = async (place: GowallaPlace) => {
     emit("submit-add-history", { passPlace: place })
   }
+  const topPlaces = computed(() => {
+    return props.showRecommend
+      .map((round) => {
+        if (round && round.length > 0) {
+          return round[0]
+        }
+        return null
+      })
+      .filter((p): p is GowallaPlace => p !== null)
+  })
+  const recRoutePoints = computed(() => {
+    const points: GowallaPlace[] = []
+    if (props.userHist && props.userHist.length > 0) {
+      const lastHistPlace = props.userHist[props.userHist.length - 1]
+      if (lastHistPlace) points.push(lastHistPlace)
+    }
+    for (let i: number = 0; i <= props.nowRecRound; i++) {
+      points.push(props.showRecommend[i][0])
+    }
+    return points
+  })
 
   const visiblePoints = computed(() => {
     const points: GowallaPlace[] = []
     if (layers.hist && props.userHist) points.push(...props.userHist)
     if (layers.search && props.showSearch) points.push(...props.showSearch)
-    if (layers.rec && props.showRecommend) points.push(...props.showRecommend)
+    if (layers.rec && props.showRecommend && props.showRecommend[props.nowRecRound]) {
+      points.push(...props.showRecommend[props.nowRecRound])
+    }
+    if (layers.rec && topPlaces) points.push(...topPlaces.value)
 
     return points.filter((p) => p && p.latitude != null && p.longitude != null)
   })
@@ -147,23 +172,38 @@
       </template>
 
       <template v-if="layers.rec">
-        <DrawRoute
-          v-if="props.userHist?.length && props.showRecommend?.length"
-          :points="[props.userHist.at(-1)!, props.showRecommend[0]]"
-          :type="'rec'" />
-        <AdvancedMarker
-          v-for="(e, index) in props.showRecommend"
-          :key="'rec-' + e.raw_poi_id"
-          :options="{
-            position: { lat: e.latitude, lng: e.longitude },
-            title: `${index + 1}. ${e.raw_poi_id} ${e.category_name}`,
-          }"
-          :pinOptions="{
-            background: 'yellow',
-            glyphText: String(index + 1),
-            glyphColor: 'black',
-          }"
-          @click="((showPoint = e), (showAdd = true))" />
+        <DrawRoute v-if="topPlaces.length > 0" :points="recRoutePoints" :type="'rec'" />
+
+        <template v-for="(es, roundId) in props.showRecommend">
+          <template v-if="roundId == nowRecRound">
+            <AdvancedMarker
+              v-for="(e, index) in es"
+              :key="'rec-' + roundId + '-' + e.raw_poi_id"
+              :options="{
+                position: { lat: e.latitude, lng: e.longitude },
+                title: `${index + 1}. ${e.raw_poi_id} ${e.category_name}`,
+              }"
+              :pinOptions="{
+                background: 'yellow',
+                glyphText: String(roundId + 1 + '-' + (index + 1)),
+                glyphColor: 'black',
+              }"
+              @click="((showPoint = e), (showAdd = true))" />
+          </template>
+          <template v-else-if="roundId < nowRecRound">
+            <AdvancedMarker
+              :options="{
+                position: { lat: es[0].latitude, lng: es[0].longitude },
+                title: `$1. ${es[0].raw_poi_id} ${es[0].category_name}`,
+              }"
+              :pinOptions="{
+                background: 'Orange',
+                glyphText: String(roundId + 1 + '-1'),
+                glyphColor: 'black',
+              }"
+              @click="((showPoint = es[0]), (showAdd = true))" />
+          </template>
+        </template>
       </template>
 
       <InfoWindow

@@ -7,6 +7,7 @@
   import SearchPanel from "./components/SearchPanel.vue"
   import PlaceCard from "./components/PlaceCard.vue"
   import ChatPanel from "./components/ChatPanel.vue"
+  import RecommendPanel from "./components/RecommendPanel.vue"
   import type { GowallaPlace, UserHistory } from "./types/place"
 
   const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
@@ -14,7 +15,8 @@
   const userHistPlace = ref<GowallaPlace[]>([])
   const userId = ref<number | null>(null)
   const showSearch = ref<GowallaPlace[]>([])
-  const showRecommend = ref<GowallaPlace[]>([])
+  const showRecommend = ref<GowallaPlace[][]>([])
+  const nowRecRound = ref(0)
   const noSearchRes = ref(false)
   const isInferring = ref(false)
   const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
@@ -22,8 +24,15 @@
   const drawer = ref(true)
   const showStr = ref("")
   const isExplaining = ref(false)
-
   const allCat = ref([])
+  const topIds = computed(() => {
+    return showRecommend.value.map((round) => {
+      if (round && round.length > 0) {
+        return round[0].raw_poi_id
+      }
+      return null
+    })
+  })
 
   onMounted(async () => {
     const timer = setInterval(() => {
@@ -132,10 +141,12 @@
   const getNextPOI = async () => {
     try {
       isInferring.value = true
-      const res = (await api.get(`/model/genpoi/${userId.value}`)).data
+      const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
+        .data
       isInferring.value = false
       console.log("got POI res", res)
-      showRecommend.value = res
+      showRecommend.value.push(res)
+      nowRecRound.value = showRecommend.value.length - 1
     } catch (error) {
       alert(error)
     }
@@ -210,25 +221,13 @@
         </v-col>
 
         <v-col cols="6" class="d-flex flex-column h-100 pa-3">
-          <v-btn
-            text="Get next POIs"
-            @click="getNextPOI"
-            class="mb-4 flex-shrink-0"
-            color="primary"
-            :loading="isInferring" />
-
-          <div class="flex-grow-1 overflow-y-auto pr-1">
-            <div class="d-flex flex-column">
-              <PlaceCard
-                v-for="(e, idx) in showRecommend"
-                :key="e.raw_poi_id || idx"
-                :place="e"
-                :show-add="true"
-                :index="idx"
-                @focus-place="handleFocusPlace"
-                @submit-add-history="addUserHistory" />
-            </div>
-          </div>
+          <RecommendPanel
+            :recommendations="showRecommend"
+            :is-inferring="isInferring"
+            @trigger-inference="getNextPOI"
+            @update-currentRound="nowRecRound = $event"
+            @focus-place="handleFocusPlace"
+            @submit-add-history="addUserHistory" />
         </v-col>
       </v-row>
     </v-navigation-drawer>
@@ -236,11 +235,15 @@
     <v-main>
       <MapCanvas
         :show-recommend="showRecommend"
+        :now-rec-round="nowRecRound"
         :show-search="showSearch"
         :user-hist="userHistPlace"
         :focused-place="focusedPlace"
         @submit-add-history="addUserHistory" />
-      <ChatPanel :show-str="showStr" :is-explaining="isExplaining" @generate-explanation="getExplanation" />
+      <ChatPanel
+        :show-str="showStr"
+        :is-explaining="isExplaining"
+        @generate-explanation="getExplanation" />
     </v-main>
   </v-app>
 </template>

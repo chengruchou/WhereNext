@@ -16,14 +16,15 @@ def explain():
         return_str = "Get next POIs first."
 
     ### modify the code below ###
-    hist_ids = [e["item_id"] for e in hists]
+    hist_ids = [e["raw_poi_id"] for e in hists]
 
+    return_str = f"This is a test for \nhist : \n{hist_ids} \n"
     for single_recs in multi_recs:
-        rec_ids = [e["item_id"] for e in single_recs]
+        rec_ids = [e["raw_poi_id"] for e in single_recs]
 
-        return_str = f"This is a test for \nhist : \n{hist_ids} \nrecs : \n{rec_ids}\n"
+        return_str += f"recs : \n{rec_ids}\n"
 
-        time.sleep(5)
+        time.sleep(0.1)
 
         hist_ids.append(rec_ids[0]) # 將第 n 次推薦的 top-1 當作下次推薦的最後一點
 

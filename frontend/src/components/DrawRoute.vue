@@ -77,7 +77,8 @@
     async (newSeq) => {
       showPath.value = await fetchRoutePath(
         props.points,
-        props.type === "hist" ? "WALK" : "TRANSIT",
+        // props.type === "hist" ? "WALK" : "TRANSIT",
+        "WALK"
       )
     },
     { deep: true, immediate: true },
