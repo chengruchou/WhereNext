@@ -6,6 +6,7 @@
   const props = defineProps<{
     recommendations: GowallaPlace[][]
     isInferring: boolean
+    hist: GowallaPlace[] | null
   }>()
 
   const emit = defineEmits<{
@@ -49,7 +50,9 @@
       @click="emit('trigger-inference')"
       color="primary"
       :loading="isInferring"
-      :disabled="recommendations.length >= 3 || isInferring" />
+      :disabled="
+        recommendations.length >= 3 || isInferring || !props.hist || props.hist.length === 0
+      " />
 
     <v-breadcrumbs
       v-if="recommendations.length > 0"

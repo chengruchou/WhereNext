@@ -229,6 +229,7 @@
           <RecommendPanel
             :recommendations="showRecommend"
             :is-inferring="isInferring"
+            :hist="userHistPlace"
             @trigger-inference="getNextPOI"
             @update-currentRound="nowRecRound = $event"
             @focus-place="handleFocusPlace"
