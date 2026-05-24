@@ -24,6 +24,7 @@
   const drawer = ref(true)
   const showStr = ref("")
   const isExplaining = ref(false)
+  const isChatPanelOpen = ref(false)
   const allCat = ref([])
   const topIds = computed(() => {
     return showRecommend.value.map((round) => {
@@ -149,6 +150,8 @@
         nowRecRound.value = showRecommend.value.length - 1
       }
       isInferring.value = false
+      isChatPanelOpen.value = true
+      getExplanation()
     } catch (error) {
       alert(error)
     }
@@ -242,10 +245,7 @@
         :user-hist="userHistPlace"
         :focused-place="focusedPlace"
         @submit-add-history="addUserHistory" />
-      <ChatPanel
-        :show-str="showStr"
-        :is-explaining="isExplaining"
-        @generate-explanation="getExplanation" />
+      <ChatPanel v-model="isChatPanelOpen" :show-str="showStr" :is-explaining="isExplaining" />
     </v-main>
   </v-app>
 </template>
