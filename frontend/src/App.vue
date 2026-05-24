@@ -141,12 +141,14 @@
   const getNextPOI = async () => {
     try {
       isInferring.value = true
-      const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
-        .data
+      for (let i = 0; i < 3; i++) {
+        const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
+          .data
+        console.log("got POI res", res)
+        showRecommend.value.push(res)
+        nowRecRound.value = showRecommend.value.length - 1
+      }
       isInferring.value = false
-      console.log("got POI res", res)
-      showRecommend.value.push(res)
-      nowRecRound.value = showRecommend.value.length - 1
     } catch (error) {
       alert(error)
     }
