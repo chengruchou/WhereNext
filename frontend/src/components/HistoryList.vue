@@ -192,7 +192,7 @@
   }
 
   .history-panel__body {
-    max-height: 250px;
+    max-height: 210px;
     overflow-y: auto;
     padding: 6px;
   }
@@ -207,8 +207,8 @@
     display: grid;
     gap: 10px;
     grid-template-columns: 30px minmax(0, 1fr) 32px;
-    min-height: 72px;
-    padding: 10px 4px;
+    min-height: 64px;
+    padding: 8px 4px;
     text-align: left;
     width: 100%;
   }

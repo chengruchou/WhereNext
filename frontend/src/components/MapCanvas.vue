@@ -21,9 +21,9 @@
   const mapRef = ref<any>(null)
   const layers = reactive({ hist: true, search: true, rec: true })
   const filters = [
-    { key: "hist", label: "History", color: "cyan-darken-2" },
-    { key: "search", label: "Search", color: "orange-darken-3" },
-    { key: "rec", label: "Recommend", color: "yellow-darken-3" },
+    { key: "hist", label: "History", color: "cyan-darken-2", icon: "mdi-history" },
+    { key: "search", label: "Search", color: "orange-darken-3", icon: "mdi-magnify" },
+    { key: "rec", label: "Model", color: "primary", icon: "mdi-chart-timeline-variant" },
   ] as const
 
   const showPoint = ref<GowallaPlace | null>(null)
@@ -52,11 +52,12 @@
     ) {
       let lastPlace = props.userHist[props.userHist.length - 1]
       for (let i: number = 0; i <= props.nowRecRound; i++) {
+        if (!props.showRecommend[i] || !props.showRecommend[i][0]) continue
         routes.push([lastPlace, props.showRecommend[i][0]])
         lastPlace = props.showRecommend[i][0]
       }
-      return routes
     }
+    return routes
   })
 
   const visiblePoints = computed(() => {
@@ -120,19 +121,22 @@
 </script>
 
 <template>
-  <div style="position: relative; width: 100%; height: 100%">
-    <div class="map-layer-filter d-flex align-center bg-white rounded-pill elevation-3 px-2 py-1">
-      <v-btn
-        v-for="f in filters"
-        :key="f.key"
-        variant="tonal"
-        rounded="pill"
-        size="small"
-        class="mx-1"
-        :color="layers[f.key] ? f.color : 'grey'"
-        @click="layers[f.key] = !layers[f.key]">
-        {{ f.label }}
-      </v-btn>
+  <div class="map-canvas">
+    <div class="map-layer-filter">
+      <div class="map-layer-filter__title">Map Layers</div>
+      <div class="map-layer-filter__controls">
+        <v-btn
+          v-for="f in filters"
+          :key="f.key"
+          :variant="layers[f.key] ? 'flat' : 'tonal'"
+          size="small"
+          class="map-layer-filter__button"
+          :color="layers[f.key] ? f.color : 'surface-variant'"
+          :prepend-icon="f.icon"
+          @click="layers[f.key] = !layers[f.key]">
+          {{ f.label }}
+        </v-btn>
+      </div>
     </div>
 
     <GoogleMap
@@ -196,10 +200,10 @@
             <AdvancedMarker
               :options="{
                 position: { lat: es[0].latitude, lng: es[0].longitude },
-                title: `$1. ${es[0].raw_poi_id} ${es[0].category_name}`,
+                title: `${roundId + 1}. ${es[0].raw_poi_id} ${es[0].category_name}`,
               }"
               :pinOptions="{
-                background: 'Orange',
+                background: 'orange',
                 glyphText: String(roundId + 1 + '-1'),
                 glyphColor: 'black',
               }"
@@ -214,7 +218,7 @@
           position: { lat: showPoint.latitude, lng: showPoint.longitude },
           headerDisabled: true,
         }">
-        <div style="zoom: 0.8">
+        <div class="map-canvas__info-card">
           <PlaceCard
             :place="showPoint"
             :show-add="showAdd"
@@ -227,21 +231,70 @@
 </template>
 
 <style scoped>
+  .map-canvas {
+    height: 100%;
+    position: relative;
+    width: 100%;
+  }
+
   .map-layer-filter {
-    bottom: 24px;
+    align-items: center;
+    background: rgb(var(--v-theme-surface));
+    border: 1px solid rgba(var(--v-border-color), 0.22);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    bottom: 17px;
+    display: flex;
+    gap: 8px;
+    min-height: 52px;
     left: calc((100% - 390px) / 2);
+    padding: 7px 9px;
     position: absolute;
     transform: translateX(-50%);
+    width: 296px;
     z-index: 1000;
+  }
+
+  .map-layer-filter__title {
+    color: rgba(var(--v-theme-on-surface), 0.72);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    line-height: 1.1;
+    margin: 0;
+    width: 46px;
+    text-transform: uppercase;
+  }
+
+  .map-layer-filter__controls {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .map-layer-filter__button {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .map-canvas__info-card {
+    max-width: 320px;
+    zoom: 0.82;
   }
 
   @media (max-width: 700px) {
     .map-layer-filter {
-      bottom: 16px;
+      bottom: 74px;
       left: 12px;
       max-width: calc(100% - 24px);
-      overflow-x: auto;
       transform: none;
+      width: auto;
+    }
+
+    .map-layer-filter__controls {
+      grid-template-columns: 1fr;
     }
   }
 </style>

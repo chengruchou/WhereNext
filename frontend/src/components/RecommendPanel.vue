@@ -76,15 +76,6 @@
       :disabled="isComplete || isInferring || !hasHistory"
       class="recommend-panel__action" />
 
-    <v-alert
-      v-if="!hasHistory"
-      type="info"
-      variant="tonal"
-      density="compact"
-      class="mt-3">
-      Load a user history to run inference.
-    </v-alert>
-
     <div v-if="hasRecommendations" class="recommend-panel__steps">
       <v-btn
         v-for="(item, index) in stepItems"

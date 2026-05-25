@@ -25,7 +25,7 @@
   const showStr = ref("")
   const isExplaining = ref(false)
   const isChatPanelOpen = ref(false)
-  const allCat = ref([])
+  const allCat = ref<string[]>([])
   const topIds = computed(() => {
     return showRecommend.value.map((round) => {
       if (round && round.length > 0) {
@@ -63,6 +63,13 @@
         userHistory.value = res.userHist
         userHistPlace.value = res.userHistPlace
         console.log("search result ", userHistory.value)
+      } else {
+        userId.value = null
+        userHistory.value = []
+        userHistPlace.value = []
+        showSearch.value = []
+        noSearchRes.value = false
+        focusedPlace.value = null
       }
     } catch (error) {
       alert(error)
@@ -117,6 +124,7 @@
         showSearch.value = [res]
       } else {
         noSearchRes.value = true
+        showSearch.value = []
       }
     } catch (error) {
       alert(error)
@@ -128,11 +136,12 @@
       console.log("Search place Category ", payload.passPlaceCat)
       const res = (await api.post("/poi/cat", { cat: payload.passPlaceCat })).data
       console.log("search place res : ", res)
-      if (res) {
+      if (Array.isArray(res) && res.length > 0) {
         noSearchRes.value = false
         showSearch.value = res
       } else {
         noSearchRes.value = true
+        showSearch.value = []
       }
     } catch (error) {
       alert(error)
@@ -145,8 +154,8 @@
   }
 
   const getNextPOI = async () => {
+    isInferring.value = true
     try {
-      isInferring.value = true
       for (let i = 0; i < 3; i++) {
         const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
           .data
@@ -154,11 +163,12 @@
         showRecommend.value.push(res)
         nowRecRound.value = showRecommend.value.length - 1
       }
-      isInferring.value = false
       isChatPanelOpen.value = true
       getExplanation()
     } catch (error) {
       alert(error)
+    } finally {
+      isInferring.value = false
     }
   }
 
@@ -169,32 +179,42 @@
   }
 
   const getExplanation = async () => {
+    isExplaining.value = true
     try {
-      isExplaining.value = true
       const res = (
         await api.post("/chat/explain", { hists: userHistPlace.value, recs: showRecommend.value })
       ).data
       showStr.value = res
-      isExplaining.value = false
     } catch (error) {
       alert(error)
+    } finally {
+      isExplaining.value = false
     }
   }
 </script>
 
 <template>
-  <v-app>
-    <v-app-bar title="POI" color="secondary" density="compact">
+  <v-app class="research-app">
+    <v-app-bar class="research-app__bar" color="surface" density="compact" elevation="1">
       <template v-slot:prepend>
-        <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
+        <v-app-bar-nav-icon color="primary" @click="drawer = !drawer"></v-app-bar-nav-icon>
       </template>
-      {{ currentTime }}<v-spacer> </v-spacer>
+
+      <v-app-bar-title class="research-app__title">
+        Trajectory-aware POI Recommendation
+      </v-app-bar-title>
+
+      <v-spacer />
+
+      <v-chip size="small" variant="tonal" color="primary" class="research-app__time">
+        {{ currentTime }}
+      </v-chip>
     </v-app-bar>
 
-    <v-navigation-drawer v-model="drawer" permanent width="600">
-      <v-row class="fill-height ma-0">
-        <v-col cols="6" class="d-flex flex-column h-100 border-e pa-3 pb-0">
-          <div class="flex-shrink-0 d-flex flex-column">
+    <v-navigation-drawer v-model="drawer" permanent width="720" class="research-drawer">
+      <div class="research-drawer__grid">
+        <section class="research-drawer__column research-drawer__column--context">
+          <div class="research-drawer__scroll">
             <UserLogin @submit-user-id="fetchUserHistory" />
 
             <HistoryList
@@ -209,30 +229,44 @@
               @clear-search-results="clearSearchResults"
               :no-search-res="noSearchRes"
               :all-cat="allCat" />
+
+            <section class="search-results">
+              <div class="search-results__header">
+                <div>
+                  <div class="text-overline text-warning font-weight-bold">Search Results</div>
+                  <h2 class="search-results__title">Retrieved Candidates</h2>
+                </div>
+
+                <v-chip size="small" variant="tonal" color="warning" class="search-results__count">
+                  {{ showSearch.length }} POIs
+                </v-chip>
+              </div>
+
+              <div class="search-results__body">
+                <div v-if="!showSearch || showSearch.length === 0" class="search-results__empty">
+                  <v-icon icon="mdi-database-search-outline" size="30" color="warning" />
+                  <div class="search-results__empty-title">No retrieved candidates</div>
+                  <div class="search-results__empty-text">Search by POI ID or category.</div>
+                </div>
+
+                <div v-else class="d-flex flex-column">
+                  <PlaceCard
+                    v-for="e in showSearch"
+                    :key="e.raw_poi_id"
+                    :place="e"
+                    :show-add="true"
+                    :index="0"
+                    context="search"
+                    @submit-add-history="addUserHistory"
+                    @focus-place="handleFocusPlace"
+                    density="compact" />
+                </div>
+              </div>
+            </section>
           </div>
+        </section>
 
-          <div class="text-warning text-overline mt-2 mb-0 px-4">Search Results</div>
-
-          <div class="flex-grow-1 overflow-y-auto px-4 pb-4" style="min-height: 400px">
-            <div v-if="!showSearch || showSearch.length === 0" class="text-grey text-center mt-4">
-              Awaiting search...
-            </div>
-
-            <div v-else class="d-flex flex-column">
-              <PlaceCard
-                v-for="e in showSearch"
-                :place="e"
-                :show-add="true"
-                :index="0"
-                context="search"
-                @submit-add-history="addUserHistory"
-                @focus-place="handleFocusPlace"
-                density="compact" />
-            </div>
-          </div>
-        </v-col>
-
-        <v-col cols="6" class="d-flex flex-column h-100 pa-3">
+        <section class="research-drawer__column research-drawer__column--model">
           <RecommendPanel
             :recommendations="showRecommend"
             :is-inferring="isInferring"
@@ -241,11 +275,11 @@
             @update-currentRound="nowRecRound = $event"
             @focus-place="handleFocusPlace"
             @submit-add-history="addUserHistory" />
-        </v-col>
-      </v-row>
+        </section>
+      </div>
     </v-navigation-drawer>
 
-    <v-main>
+    <v-main class="research-main">
       <MapCanvas
         :show-recommend="showRecommend"
         :now-rec-round="nowRecRound"
@@ -257,3 +291,151 @@
     </v-main>
   </v-app>
 </template>
+
+<style scoped>
+  .research-app {
+    background: rgb(var(--v-theme-background));
+  }
+
+  .research-app__bar {
+    border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+  }
+
+  .research-app__title {
+    color: rgb(var(--v-theme-on-surface));
+    font-size: 0.96rem;
+    font-weight: 800;
+    letter-spacing: 0;
+  }
+
+  .research-app__time {
+    font-weight: 700;
+    margin-right: 12px;
+  }
+
+  .research-drawer {
+    border-right: 1px solid rgba(var(--v-border-color), 0.18);
+  }
+
+  .research-drawer__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    height: 100%;
+    min-height: 0;
+  }
+
+  .research-drawer__column {
+    min-height: 0;
+    padding: 14px 14px 0;
+  }
+
+  .research-drawer__column--context {
+    border-right: 1px solid rgba(var(--v-border-color), 0.18);
+    padding-bottom: 0;
+  }
+
+  .research-drawer__column--model {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 14px;
+  }
+
+  .research-drawer__scroll {
+    height: 100%;
+    min-height: 0;
+    overflow-y: overlay;
+    padding-bottom: 14px;
+    padding-right: 4px;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+  }
+
+  .research-drawer__scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .research-drawer__scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .research-drawer__scroll::-webkit-scrollbar-thumb {
+    background: rgba(var(--v-theme-on-surface), 0.24);
+    border-radius: 999px;
+  }
+
+  .search-results {
+    margin: 0 4px 14px;
+  }
+
+  .search-results__header {
+    align-items: flex-start;
+    border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+    display: flex;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 2px 2px 10px;
+  }
+
+  .search-results__title {
+    color: rgb(var(--v-theme-on-surface));
+    font-size: 1.05rem;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0;
+  }
+
+  .search-results__count {
+    flex-shrink: 0;
+    font-weight: 700;
+    margin-top: 4px;
+  }
+
+  .search-results__body {
+    background: rgb(var(--v-theme-surface));
+    border: 1px solid rgba(var(--v-border-color), 0.22);
+    margin-top: 12px;
+    max-height: 360px;
+    min-height: 170px;
+    overflow-y: auto;
+    padding: 8px 4px;
+  }
+
+  .search-results__empty {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 150px;
+    padding: 20px 16px;
+    text-align: center;
+  }
+
+  .search-results__empty-title {
+    color: rgb(var(--v-theme-on-surface));
+    font-size: 0.9rem;
+    font-weight: 800;
+    margin-top: 10px;
+  }
+
+  .search-results__empty-text {
+    color: rgba(var(--v-theme-on-surface), 0.68);
+    font-size: 0.76rem;
+    line-height: 1.35;
+    margin-top: 3px;
+  }
+
+  .research-main {
+    min-height: 0;
+  }
+
+  @media (max-width: 1200px) {
+    :deep(.research-drawer) {
+      width: 660px !important;
+    }
+
+    .research-drawer__column {
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+  }
+</style>
