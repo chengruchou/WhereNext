@@ -26,6 +26,7 @@
   const isExplaining = ref(false)
   const isChatPanelOpen = ref(false)
   const allCat = ref<string[]>([])
+  const activeEvidenceTab = ref<"history" | "search">("history")
   const topIds = computed(() => {
     return showRecommend.value.map((round) => {
       if (round && round.length > 0) {
@@ -62,6 +63,7 @@
         const res = (await api.get(`/user/${userId.value}`)).data
         userHistory.value = res.userHist
         userHistPlace.value = res.userHistPlace
+        activeEvidenceTab.value = "history"
         console.log("search result ", userHistory.value)
       } else {
         userId.value = null
@@ -70,6 +72,7 @@
         showSearch.value = []
         noSearchRes.value = false
         focusedPlace.value = null
+        activeEvidenceTab.value = "history"
       }
     } catch (error) {
       alert(error)
@@ -122,9 +125,11 @@
       if (res && res.category_name) {
         noSearchRes.value = false
         showSearch.value = [res]
+        activeEvidenceTab.value = "search"
       } else {
         noSearchRes.value = true
         showSearch.value = []
+        activeEvidenceTab.value = "search"
       }
     } catch (error) {
       alert(error)
@@ -139,9 +144,11 @@
       if (Array.isArray(res) && res.length > 0) {
         noSearchRes.value = false
         showSearch.value = res
+        activeEvidenceTab.value = "search"
       } else {
         noSearchRes.value = true
         showSearch.value = []
+        activeEvidenceTab.value = "search"
       }
     } catch (error) {
       alert(error)
@@ -151,6 +158,7 @@
   const clearSearchResults = () => {
     showSearch.value = []
     noSearchRes.value = false
+    activeEvidenceTab.value = "search"
   }
 
   const getNextPOI = async () => {
@@ -214,14 +222,8 @@
     <v-navigation-drawer v-model="drawer" permanent width="720" class="research-drawer">
       <div class="research-drawer__grid">
         <section class="research-drawer__column research-drawer__column--context">
-          <div class="research-drawer__scroll">
+          <div class="research-drawer__controls">
             <UserLogin @submit-user-id="fetchUserHistory" />
-
-            <HistoryList
-              :user-history="userHistory"
-              @delete-all="delUserHistory"
-              @delete-one="delOneHistory"
-              @focus-place="handleFocusPlace" />
 
             <SearchPanel
               @submit-search-place-id="searchPlaceId"
@@ -229,41 +231,75 @@
               @clear-search-results="clearSearchResults"
               :no-search-res="noSearchRes"
               :all-cat="allCat" />
-
-            <section class="search-results">
-              <div class="search-results__header">
-                <div>
-                  <div class="text-overline text-warning font-weight-bold">Search Results</div>
-                  <h2 class="search-results__title">Retrieved Candidates</h2>
-                </div>
-
-                <v-chip size="small" variant="tonal" color="warning" class="search-results__count">
-                  {{ showSearch.length }} POIs
-                </v-chip>
-              </div>
-
-              <div class="search-results__body">
-                <div v-if="!showSearch || showSearch.length === 0" class="search-results__empty">
-                  <v-icon icon="mdi-database-search-outline" size="30" color="warning" />
-                  <div class="search-results__empty-title">No retrieved candidates</div>
-                  <div class="search-results__empty-text">Search by POI ID or category.</div>
-                </div>
-
-                <div v-else class="d-flex flex-column">
-                  <PlaceCard
-                    v-for="e in showSearch"
-                    :key="e.raw_poi_id"
-                    :place="e"
-                    :show-add="true"
-                    :index="0"
-                    context="search"
-                    @submit-add-history="addUserHistory"
-                    @focus-place="handleFocusPlace"
-                    density="compact" />
-                </div>
-              </div>
-            </section>
           </div>
+
+          <section class="evidence-panel">
+            <v-tabs
+              v-model="activeEvidenceTab"
+              color="primary"
+              density="compact"
+              grow
+              class="evidence-panel__tabs">
+              <v-tab value="history" class="evidence-panel__tab">
+                History
+                <v-chip size="x-small" variant="tonal" color="secondary" class="ml-2">
+                  {{ userHistory.length }}
+                </v-chip>
+              </v-tab>
+              <v-tab value="search" class="evidence-panel__tab">
+                Search
+                <v-chip size="x-small" variant="tonal" color="warning" class="ml-2">
+                  {{ showSearch.length }}
+                </v-chip>
+              </v-tab>
+            </v-tabs>
+
+            <v-window v-model="activeEvidenceTab" class="evidence-panel__window">
+              <v-window-item value="history" class="evidence-panel__item">
+                <HistoryList
+                  :user-history="userHistory"
+                  @delete-all="delUserHistory"
+                  @delete-one="delOneHistory"
+                  @focus-place="handleFocusPlace" />
+              </v-window-item>
+
+              <v-window-item value="search" class="evidence-panel__item">
+                <section class="search-results">
+                  <div class="search-results__header">
+                    <div>
+                      <div class="text-overline text-warning font-weight-bold">Search Results</div>
+                      <h2 class="search-results__title">Retrieved Candidates</h2>
+                    </div>
+
+                    <v-chip size="small" variant="tonal" color="warning" class="search-results__count">
+                      {{ showSearch.length }} POIs
+                    </v-chip>
+                  </div>
+
+                  <div class="search-results__body">
+                    <div v-if="!showSearch || showSearch.length === 0" class="search-results__empty">
+                      <v-icon icon="mdi-database-search-outline" size="30" color="warning" />
+                      <div class="search-results__empty-title">No retrieved candidates</div>
+                      <div class="search-results__empty-text">Search by POI ID or category.</div>
+                    </div>
+
+                    <div v-else class="d-flex flex-column">
+                      <PlaceCard
+                        v-for="e in showSearch"
+                        :key="e.raw_poi_id"
+                        :place="e"
+                        :show-add="true"
+                        :index="0"
+                        context="search"
+                        @submit-add-history="addUserHistory"
+                        @focus-place="handleFocusPlace"
+                        density="compact" />
+                    </div>
+                  </div>
+                </section>
+              </v-window-item>
+            </v-window>
+          </section>
         </section>
 
         <section class="research-drawer__column research-drawer__column--model">
@@ -331,6 +367,8 @@
 
   .research-drawer__column--context {
     border-right: 1px solid rgba(var(--v-border-color), 0.18);
+    display: flex;
+    flex-direction: column;
     padding-bottom: 0;
   }
 
@@ -340,31 +378,58 @@
     padding-bottom: 14px;
   }
 
-  .research-drawer__scroll {
-    height: 100%;
+  .research-drawer__controls {
+    flex-shrink: 0;
+  }
+
+  .evidence-panel {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    margin: 0 4px 14px;
     min-height: 0;
-    overflow-y: overlay;
-    padding-bottom: 14px;
-    padding-right: 4px;
+  }
+
+  .evidence-panel__tabs {
+    background: rgb(var(--v-theme-surface));
+    border: 1px solid rgba(var(--v-border-color), 0.22);
+    flex-shrink: 0;
+  }
+
+  .evidence-panel__tab {
+    font-weight: 800;
+    letter-spacing: 0;
+    min-width: 0;
+  }
+
+  .evidence-panel__window {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-top: 12px;
     scrollbar-gutter: stable;
     scrollbar-width: thin;
   }
 
-  .research-drawer__scroll::-webkit-scrollbar {
+  .evidence-panel__window::-webkit-scrollbar {
     width: 6px;
   }
 
-  .research-drawer__scroll::-webkit-scrollbar-track {
+  .evidence-panel__window::-webkit-scrollbar-track {
     background: transparent;
   }
 
-  .research-drawer__scroll::-webkit-scrollbar-thumb {
+  .evidence-panel__window::-webkit-scrollbar-thumb {
     background: rgba(var(--v-theme-on-surface), 0.24);
     border-radius: 999px;
   }
 
+  .evidence-panel__item {
+    min-height: 100%;
+  }
+
   .search-results {
-    margin: 0 4px 14px;
+    margin: 0;
   }
 
   .search-results__header {
@@ -394,9 +459,8 @@
     background: rgb(var(--v-theme-surface));
     border: 1px solid rgba(var(--v-border-color), 0.22);
     margin-top: 12px;
-    max-height: 360px;
     min-height: 170px;
-    overflow-y: auto;
+    overflow: visible;
     padding: 8px 4px;
   }
 

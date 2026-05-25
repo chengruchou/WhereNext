@@ -192,8 +192,7 @@
   }
 
   .history-panel__body {
-    max-height: 210px;
-    overflow-y: auto;
+    overflow: visible;
     padding: 6px;
   }
 
