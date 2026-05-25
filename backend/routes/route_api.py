@@ -63,7 +63,6 @@ def get_route():
         "X-Goog-Api-Key": api_key,
         "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.viewport",
     }
-
     resp = (
         requests.session()
         .post(

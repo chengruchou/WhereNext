@@ -42,16 +42,21 @@
       })
       .filter((p): p is GowallaPlace => p !== null)
   })
-  const recRoutePoints = computed(() => {
-    const points: GowallaPlace[] = []
-    if (props.userHist && props.userHist.length > 0) {
-      const lastHistPlace = props.userHist[props.userHist.length - 1]
-      if (lastHistPlace) points.push(lastHistPlace)
+  const recRoutes = computed(() => {
+    const routes: GowallaPlace[][] = []
+    if (
+      props.userHist &&
+      props.userHist.length > 0 &&
+      props.showRecommend &&
+      props.nowRecRound >= 0
+    ) {
+      let lastPlace = props.userHist[props.userHist.length - 1]
+      for (let i: number = 0; i <= props.nowRecRound; i++) {
+        routes.push([lastPlace, props.showRecommend[i][0]])
+        lastPlace = props.showRecommend[i][0]
+      }
+      return routes
     }
-    for (let i: number = 0; i <= props.nowRecRound; i++) {
-      points.push(props.showRecommend[i][0])
-    }
-    return points
   })
 
   const visiblePoints = computed(() => {
@@ -172,7 +177,12 @@
       </template>
 
       <template v-if="layers.rec">
-        <DrawRoute v-if="topPlaces.length > 0" :points="recRoutePoints" :type="'rec'" />
+        <DrawRoute
+          v-for="(e, idx) in recRoutes"
+          :key="idx"
+          v-if="topPlaces.length > 0"
+          :points="e"
+          :type="'rec'" />
 
         <template v-for="(es, roundId) in props.showRecommend">
           <template v-if="roundId == nowRecRound">

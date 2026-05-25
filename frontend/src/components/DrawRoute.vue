@@ -77,8 +77,8 @@
     async (newSeq) => {
       showPath.value = await fetchRoutePath(
         props.points,
-        // props.type === "hist" ? "WALK" : "TRANSIT",
-        "WALK"
+        props.type === "hist" ? "WALK" : "TRANSIT",
+        // "WALK"
       )
     },
     { deep: true, immediate: true },
@@ -123,7 +123,7 @@
         zIndex: 2,
       }" />
     <InfoWindow
-      v-if="showPath.midPoint && showPath.duration !== '0s' && !closeRoute"
+      v-if="showPath.midPoint && showPath.duration !== '0s' && !closeRoute && props.type !== 'hist'"
       :options="{ position: showPath.midPoint, headerDisabled: true }">
       <div
         style="
