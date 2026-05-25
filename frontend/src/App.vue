@@ -218,6 +218,7 @@
                 :place="e"
                 :show-add="true"
                 :index="0"
+                context="search"
                 @submit-add-history="addUserHistory"
                 @focus-place="handleFocusPlace"
                 density="compact" />
