@@ -139,6 +139,11 @@
     }
   }
 
+  const clearSearchResults = () => {
+    showSearch.value = []
+    noSearchRes.value = false
+  }
+
   const getNextPOI = async () => {
     try {
       isInferring.value = true
@@ -201,6 +206,7 @@
             <SearchPanel
               @submit-search-place-id="searchPlaceId"
               @submit-search-place-cat="searchPlaceCat"
+              @clear-search-results="clearSearchResults"
               :no-search-res="noSearchRes"
               :all-cat="allCat" />
           </div>
