@@ -121,15 +121,7 @@
 
 <template>
   <div style="position: relative; width: 100%; height: 100%">
-    <div
-      style="
-        position: absolute;
-        bottom: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 1000;
-      "
-      class="d-flex align-center bg-white rounded-pill elevation-3 px-2 py-1">
+    <div class="map-layer-filter d-flex align-center bg-white rounded-pill elevation-3 px-2 py-1">
       <v-btn
         v-for="f in filters"
         :key="f.key"
@@ -233,3 +225,23 @@
     </GoogleMap>
   </div>
 </template>
+
+<style scoped>
+  .map-layer-filter {
+    bottom: 24px;
+    left: calc((100% - 390px) / 2);
+    position: absolute;
+    transform: translateX(-50%);
+    z-index: 1000;
+  }
+
+  @media (max-width: 700px) {
+    .map-layer-filter {
+      bottom: 16px;
+      left: 12px;
+      max-width: calc(100% - 24px);
+      overflow-x: auto;
+      transform: none;
+    }
+  }
+</style>

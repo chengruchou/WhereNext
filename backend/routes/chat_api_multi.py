@@ -1,7 +1,8 @@
-from flask import Blueprint, jsonify, request
 import os
+
+from flask import Blueprint, jsonify, request
 from google import genai
-import time
+
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api/chat")
@@ -10,8 +11,12 @@ chat_bp = Blueprint("chat", __name__, url_prefix="/api/chat")
 @chat_bp.route("/explain", methods=["POST"])
 def explain():
     rq = request.json
-    hists = rq["hists"] # 大小為 : min(10, len(user_hist)) * 1，資料格式參照下方 30~52 行的 dict structure
-    multi_recs = rq["recs"] # 大小為 : 推論次數 * 每次推論點數(5)，資料格式參照下方 30~52 行的 dict structure
+    hists = rq[
+        "hists"
+    ]  # 大小為 : min(10, len(user_hist)) * 1，資料格式參照下方 30~52 行的 dict structure
+    multi_recs = rq[
+        "recs"
+    ]  # 大小為 : 推論次數 * 每次推論點數(5)，資料格式參照下方 30~52 行的 dict structure
 
     if hists == []:
         return_str = "No user history."
@@ -29,7 +34,7 @@ def explain():
     for i, single_recs in enumerate(multi_recs):
         poi = single_recs[0]
         route_lines.append(
-            f"Step {i+1}: {poi['category_name']} (id:{poi['raw_poi_id']}, "
+            f"Step {i + 1}: {poi['category_name']} (id:{poi['raw_poi_id']}, "
             f"checkins:{poi['checkins_count']}, lat:{poi['latitude']:.4f}, lng:{poi['longitude']:.4f})"
         )
         hist_ids.append(poi["raw_poi_id"])
@@ -43,40 +48,43 @@ def explain():
     {chr(10).join(route_lines)}
 
     Please output:
-    1. For each step, one short sentence explaining why this POI is recommended.
-    2. At the end, an "Overall Route Summary" paragraph (2-3 sentences) explaining why this route suits the user.
+    1. In the beginning, an "Overall Route Summary" paragraph (2-3 sentences) explaining why this route suits the user.
+    2. Next, for each step, one short sentence explaining why this POI is recommended.
 
     Use ONLY the POI ids listed above. Do not invent, alter, or add any id.
 
-    Format:
-    Step 1: <category (id)>: <reason>
-    Step 2: ...
-    Overall Route Summary:
+    Please use **Markdown** formatting to make the output readable. 
+
+    Format Example:
+    ### Overall Route Summary
     <summary>
+
+    **Step 1: <category>** `(<id>)`
+    <reason>
+
+    **Step 2: ...**
+    ...
     """
 
-    response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents=prompt
-    )
+    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
     full_text = response.text
 
-    # 以 "Overall Route Summary" 為界，拆成「逐點 top-1 原因」與「整體路徑摘要」
-    marker = "Overall Route Summary"
-    if marker in full_text:
-        steps_part, summary_part = full_text.split(marker, 1)
-        summary_part = marker + summary_part
-    else:
-        steps_part = ""
-        summary_part = full_text
+    # # 以 "Overall Route Summary" 為界，拆成「逐點 top-1 原因」與「整體路徑摘要」
+    # marker = "Overall Route Summary"
+    # if marker in full_text:
+    #     steps_part, summary_part = full_text.split(marker, 1)
+    #     summary_part = marker + summary_part
+    # else:
+    #     steps_part = ""
+    #     summary_part = full_text
 
-    # 逐點 top-1 推薦原因 → 只印在後端 terminal
-    print("=== Top-1 推薦原因 ===")
-    print(steps_part.strip())
-    print("=====================")
+    # # 逐點 top-1 推薦原因 → 只印在後端 terminal
+    # print("=== Top-1 推薦原因 ===")
+    # print(steps_part.strip())
+    # print("=====================")
 
-    # 前端只顯示 Overall Route Summary
-    return_str = summary_part.strip()
+    # # 前端只顯示 Overall Route Summary
+    # return_str = summary_part.strip()
 
     ### Place dict structure ###
     # print(hists[0])
@@ -101,7 +109,9 @@ def explain():
     #     "users_count": 267,
     #     "users_count_from_events": 34,
     # }
-    
+
     ### modify the code above ###
 
-    return jsonify(return_str)
+    # print(full_text)
+
+    return jsonify(full_text)
