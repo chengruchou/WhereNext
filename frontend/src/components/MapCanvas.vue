@@ -12,6 +12,7 @@
     nowRecRound: number
     userHist: GowallaPlace[]
     focusedPlace: GowallaPlace | null
+    layers: { hist: boolean; search: boolean; rec: boolean }
   }>()
   const emit = defineEmits<{
     (e: "submit-add-history", payload: { passPlace: GowallaPlace | null }): void
@@ -19,12 +20,6 @@
 
   const center = ref({ lat: 39.0528237667, lng: -94.59031105 })
   const mapRef = ref<any>(null)
-  const layers = reactive({ hist: true, search: true, rec: true })
-  const filters = [
-    { key: "hist", label: "History", color: "indigo-darken-4", icon: "mdi-history" },
-    { key: "search", label: "Search", color: "amber-darken-2", icon: "mdi-magnify" },
-    { key: "rec", label: "Model", color: "indigo-accent-4", icon: "mdi-chart-timeline-variant" },
-  ] as const
 
   const showPoint = ref<GowallaPlace | null>(null)
   const showPointIndex = ref(0)
@@ -64,12 +59,12 @@
 
   const visiblePoints = computed(() => {
     const points: GowallaPlace[] = []
-    if (layers.hist && props.userHist) points.push(...props.userHist)
-    if (layers.search && props.showSearch) points.push(...props.showSearch)
-    if (layers.rec && props.showRecommend && props.showRecommend[props.nowRecRound]) {
+    if (props.layers.hist && props.userHist) points.push(...props.userHist)
+    if (props.layers.search && props.showSearch) points.push(...props.showSearch)
+    if (props.layers.rec && props.showRecommend && props.showRecommend[props.nowRecRound]) {
       points.push(...props.showRecommend[props.nowRecRound])
     }
-    if (layers.rec && topPlaces) points.push(...topPlaces.value)
+    if (props.layers.rec && topPlaces) points.push(...topPlaces.value)
 
     return points.filter((p) => p && p.latitude != null && p.longitude != null)
   })
@@ -124,23 +119,6 @@
 
 <template>
   <div class="map-canvas">
-    <div class="map-layer-filter">
-      <div class="map-layer-filter__title">Map Layers</div>
-      <div class="map-layer-filter__controls">
-        <v-btn
-          v-for="f in filters"
-          :key="f.key"
-          :variant="layers[f.key] ? 'flat' : 'tonal'"
-          size="small"
-          class="map-layer-filter__button"
-          :color="layers[f.key] ? f.color : 'surface-variant'"
-          :prepend-icon="f.icon"
-          @click="layers[f.key] = !layers[f.key]">
-          {{ f.label }}
-        </v-btn>
-      </div>
-    </div>
-
     <GoogleMap
       ref="mapRef"
       :api-key="apiKey"
@@ -148,8 +126,9 @@
       style="width: 100%; height: 100%"
       :center="center"
       :zoom="15"
+      :disable-default-ui="true"
       @click="showPoint = null">
-      <template v-if="layers.hist">
+      <template v-if="props.layers.hist">
         <DrawRoute :points="props.userHist" :type="'hist'" />
         <AdvancedMarker
           v-for="(e, index) in props.userHist"
@@ -168,7 +147,7 @@
           @click="((showPoint = e), (showAdd = false), (showPointIndex = index), (showPointContext = 'history'))" />
       </template>
 
-      <template v-if="layers.search">
+      <template v-if="props.layers.search">
         <AdvancedMarker
           v-for="(e, index) in props.showSearch"
           :key="'search-' + e.raw_poi_id"
@@ -184,7 +163,7 @@
           @click="((showPoint = e), (showAdd = true), (showPointIndex = index), (showPointContext = 'search'))" />
       </template>
 
-      <template v-if="layers.rec">
+      <template v-if="props.layers.rec">
         <DrawRoute
           v-for="(e, idx) in recRoutes"
           :key="idx"
@@ -234,14 +213,18 @@
           position: { lat: showPoint.latitude, lng: showPoint.longitude },
           headerDisabled: true,
         }">
-        <div class="map-canvas__info-card">
-          <PlaceCard
-            :place="showPoint"
-            :show-add="showAdd"
-            :index="showPointIndex"
-            :context="showPointContext"
-            compact
-            @submit-add-history="addHistory(showPoint)" />
+        <div class="map-canvas__info-window">
+          <v-theme-provider theme="light">
+            <div class="map-canvas__info-card">
+              <PlaceCard
+                :place="showPoint"
+                :show-add="showAdd"
+                :index="showPointIndex"
+                :context="showPointContext"
+                compact
+                @submit-add-history="addHistory(showPoint)" />
+            </div>
+          </v-theme-provider>
         </div>
       </InfoWindow>
     </GoogleMap>
@@ -251,7 +234,31 @@
 <style scoped>
   .map-canvas__info-card {
     min-width: 220px;
-    max-width: 260px;
+    max-width: 320px;
+  }
+
+  /* Deep overrides for Google Maps InfoWindow */
+  :deep(.gm-style-iw-c) {
+    background-color: #ffffff !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  :deep(.gm-style-iw-d) {
+    overflow: hidden !important;
+    max-height: none !important;
+  }
+
+  :deep(.gm-style-iw-tc::after) {
+    background-color: #ffffff !important;
+  }
+
+  :deep(.gm-ui-hover-effect) {
+    top: 4px !important;
+    right: 4px !important;
+    background: rgba(var(--v-theme-surface), 0.8) !important;
+    border-radius: 50% !important;
   }
 
   .map-canvas {
@@ -262,48 +269,42 @@
 
   .map-layer-filter {
     align-items: center;
-    background: rgb(var(--v-theme-surface));
+    background: rgba(var(--v-theme-surface), 0.9);
+    backdrop-filter: blur(10px);
     border: 1px solid rgba(var(--v-border-color), 0.22);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
-    bottom: 17px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
     display: flex;
+    flex-direction: column;
     gap: 8px;
-    min-height: 52px;
-    left: calc((100% - 390px) / 2);
-    padding: 7px 9px;
+    padding: 12px 8px;
     position: absolute;
-    transform: translateX(-50%);
-    width: 296px;
+    right: 24px;
+    /* Position above the ChatPanel (which starts at bottom: 24px and has a header) */
+    bottom: 104px;
+    width: auto;
     z-index: 1000;
   }
 
   .map-layer-filter__title {
-    color: rgba(var(--v-theme-on-surface), 0.72);
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0;
-    line-height: 1.1;
-    margin: 0;
-    width: 46px;
+    color: rgb(var(--v-theme-primary));
+    font-size: 0.6rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
     text-transform: uppercase;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
   }
 
   .map-layer-filter__controls {
-    display: grid;
-    gap: 6px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .map-layer-filter__button {
-    font-size: 0.7rem;
-    font-weight: 800;
-    letter-spacing: 0;
-    min-width: 0;
-    padding-inline: 8px;
-  }
-
-  .map-canvas__info-card {
-    max-width: 320px;
+    border-radius: 8px !important;
   }
 
   @media (max-width: 700px) {

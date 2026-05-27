@@ -27,6 +27,15 @@
   const isChatPanelOpen = ref(false)
   const allCat = ref<string[]>([])
   const activeEvidenceTab = ref<"history" | "search">("history")
+  
+  // Map Layers State moved from MapCanvas
+  const layers = ref({ hist: true, search: true, rec: true })
+  const filters = [
+    { key: "hist", label: "History", color: "indigo-darken-4", icon: "mdi-history" },
+    { key: "search", label: "Search", color: "amber-darken-2", icon: "mdi-magnify" },
+    { key: "rec", label: "Model", color: "indigo-accent-4", icon: "mdi-chart-timeline-variant" },
+  ] as const
+
   const topIds = computed(() => {
     return showRecommend.value.map((round) => {
       if (round && round.length > 0) {
@@ -214,6 +223,26 @@
 
       <v-spacer />
 
+      <!-- Map Layer Controls in App Bar -->
+      <div class="research-app__layer-controls d-flex align-center ga-2 mr-4">
+        <span class="text-overline font-weight-bold mr-1 d-none d-sm-inline" style="font-size: 0.65rem !important">Map Layers</span>
+        <v-tooltip v-for="f in filters" :key="f.key" location="bottom">
+          <template v-slot:activator="{ props }">
+            <v-btn
+              v-bind="props"
+              :variant="layers[f.key] ? 'flat' : 'tonal'"
+              size="x-small"
+              icon
+              :color="layers[f.key] ? f.color : 'surface-variant'"
+              class="research-app__layer-btn"
+              @click="layers[f.key] = !layers[f.key]">
+              <v-icon :icon="f.icon" size="18" />
+            </v-btn>
+          </template>
+          <span>{{ f.label }}</span>
+        </v-tooltip>
+      </div>
+
       <v-chip size="small" variant="tonal" color="primary" class="research-app__time">
         {{ currentTime }}
       </v-chip>
@@ -322,6 +351,7 @@
         :show-search="showSearch"
         :user-hist="userHistPlace"
         :focused-place="focusedPlace"
+        :layers="layers"
         @submit-add-history="addUserHistory" />
       <ChatPanel v-model="isChatPanelOpen" :show-str="showStr" :is-explaining="isExplaining" />
     </v-main>
@@ -347,6 +377,15 @@
   .research-app__time {
     font-weight: 700;
     margin-right: 12px;
+  }
+
+  .research-app__layer-btn {
+    border-radius: 8px !important;
+    transition: transform 0.2s ease;
+  }
+
+  .research-app__layer-btn:hover {
+    transform: translateY(-2px);
   }
 
   .research-drawer {

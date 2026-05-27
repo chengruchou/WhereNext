@@ -133,45 +133,53 @@
 
 <style scoped>
   .xai-panel {
-    bottom: 17px;
+    bottom: 24px;
     position: absolute;
-    right: 10px;
-    width: 360px;
+    right: 24px;
+    width: 380px;
     z-index: 2000;
   }
 
   .xai-panel__card {
-    background: rgb(var(--v-theme-surface));
-    border-color: rgba(var(--v-border-color), 0.22);
+    background: rgba(var(--v-theme-surface), 0.9) !important;
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(var(--v-border-color), 0.22) !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    overflow: hidden;
   }
 
   .xai-panel__header {
-    padding: 10px 14px;
+    background: rgba(var(--v-theme-primary), 0.05);
+    padding: 12px 16px !important;
+    transition: background 0.2s ease;
+  }
+
+  .xai-panel__header:hover {
+    background: rgba(var(--v-theme-primary), 0.08);
   }
 
   .xai-panel__eyebrow {
     color: rgb(var(--v-theme-primary));
-    font-size: 0.67rem;
-    font-weight: 800;
-    letter-spacing: 0;
-    line-height: 1.1;
+    font-size: 0.65rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    line-height: 1.2;
     text-transform: uppercase;
   }
 
   .xai-panel__title {
     color: rgb(var(--v-theme-on-surface));
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 800;
-    line-height: 1.2;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.3;
   }
 
   .xai-panel__body {
-    height: 300px;
+    height: 320px;
     overflow-y: auto;
-    padding: 14px;
+    padding: 16px;
+    scrollbar-width: thin;
   }
 
   .xai-panel__content {

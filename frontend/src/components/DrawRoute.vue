@@ -127,8 +127,12 @@
       :options="{ position: infoPosition, headerDisabled: true }"
     >
       <div class="route-info-window">
-        <v-icon :icon="showPath.type == 'WALK' ? 'mdi-walk' : 'mdi-bus-multiple'" size="25" />
-        <div>
+        <v-icon 
+          :icon="showPath.type == 'WALK' ? 'mdi-walk' : 'mdi-bus-multiple'" 
+          size="25" 
+          color="#333333"
+        />
+        <div style="color: #333333 !important;">
           {{ formatTime(showPath.duration) }}<br />
           {{
             showPath.distance > 1000
@@ -139,7 +143,7 @@
         <v-btn
           icon="mdi-close-box"
           size="10"
-          class="mx-1"
+          class="mx-1 route-info-window__close"
           variant="text"
           @click="showInfo = false"
         />
@@ -148,28 +152,31 @@
   </template>
 </template>
 
-<style>
+<style scoped>
   .route-info-window {
-    color: black;
-    font-size: 12px;
-    font-weight: 500;
+    color: #333333;
+    font-size: 0.75rem;
+    font-weight: 600;
     display: flex;
-    gap: 5px;
+    gap: 8px;
     align-items: center;
+    padding: 4px 8px;
   }
-  .gm-ui-hover-effect {
-    display: none !important;
-  }
-  .gm-style-iw-c {
-    padding: 4px 8px !important;
-    border-radius: 8px !important;
-  }
-  .gm-style-iw-d {
-    overflow: hidden !important;
+
+  :deep(.gm-style-iw-c) {
+    background-color: #ffffff !important;
     padding: 0 !important;
-    margin: 0 !important;
   }
-  .gm-style-iw-ch {
-    display: none !important;
+
+  :deep(.gm-style-iw-d) {
+    overflow: hidden !important;
+  }
+
+  :deep(.gm-style-iw-tc::after) {
+    background-color: #ffffff !important;
+  }
+
+  .route-info-window__close {
+    color: #666666 !important;
   }
 </style>
