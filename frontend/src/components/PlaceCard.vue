@@ -8,9 +8,11 @@
       showAdd: Boolean
       index: number
       context?: "search" | "recommendation" | "history"
+      compact?: boolean
     }>(),
     {
       context: "search",
+      compact: false,
     },
   )
   const expand = ref(false)
@@ -33,8 +35,9 @@
   }
 
   const rankLabel = computed(() => {
-    if (!props.showAdd) return `#${props.index + 1}`
+    if (props.context === "history") return `#${props.index + 1}`
     if (props.context === "recommendation") return `Top ${props.index + 1}`
+    if (props.context === "search") return `#${props.index + 1}`
     return "POI"
   })
 
@@ -78,34 +81,34 @@
 <template>
   <v-card
     v-if="props.place"
-    class="place-card mx-1 my-2"
+    :class="['place-card', 'mx-1', 'my-2', { 'place-card--compact': props.compact }]"
     elevation="0"
     variant="outlined"
     @click="focusPlace"
     style="cursor: pointer">
-    <v-card-item class="pb-2">
+    <v-card-item :class="props.compact ? 'pa-2' : 'pb-2'">
       <template #prepend>
         <v-avatar
           class="place-card__rank"
           :color="isRecommendation ? 'primary' : 'surface-variant'"
           variant="flat"
-          size="44">
+          :size="props.compact ? 32 : 44">
           <span class="place-card__rank-label">{{ rankLabel }}</span>
         </v-avatar>
       </template>
 
-      <v-card-title class="place-card__title text-wrap pa-0">
+      <v-card-title :class="['place-card__title', 'text-wrap', 'pa-0', { 'text-subtitle-1': props.compact }]">
         {{ props.place.category_name || "Unknown place" }}
       </v-card-title>
 
       <v-card-subtitle class="place-card__subtitle pa-0 pt-1">
-        <v-icon icon="mdi-map-marker-outline" size="15" class="mr-1" />
+        <v-icon icon="mdi-map-marker-outline" :size="props.compact ? 12 : 15" class="mr-1" />
         {{ coordinateText }}
       </v-card-subtitle>
     </v-card-item>
 
-    <v-card-text class="pt-1 pb-2">
-      <div class="d-flex flex-wrap ga-2 mb-3">
+    <v-card-text :class="['pb-2', props.compact ? 'pt-0' : 'pt-1']">
+      <div :class="['d-flex', 'flex-wrap', 'ga-2', props.compact ? 'mb-1' : 'mb-3']">
         <v-chip size="small" variant="tonal" color="primary" class="place-card__id-chip">
           POI ID: {{ props.place.raw_poi_id }}
         </v-chip>
@@ -188,6 +191,39 @@
     transition:
       border-color 0.18s ease,
       box-shadow 0.18s ease;
+  }
+
+  .place-card__title {
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.25;
+    color: rgb(var(--v-theme-on-surface));
+  }
+
+  .place-card__subtitle {
+    align-items: center;
+    color: rgba(var(--v-theme-on-surface), 0.78);
+    display: flex;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .place-card--compact .place-card__title {
+    font-size: 0.85rem !important;
+    font-weight: 700;
+  }
+
+  .place-card--compact .place-card__subtitle {
+    font-size: 0.7rem !important;
+  }
+
+  .place-card--compact .v-chip {
+    height: 20px !important;
+    font-size: 0.65rem !important;
+  }
+
+  .place-card--compact .v-divider {
+    display: none !important;
   }
 
   .place-card:hover {

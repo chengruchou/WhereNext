@@ -285,11 +285,11 @@
 
                     <div v-else class="d-flex flex-column">
                       <PlaceCard
-                        v-for="e in showSearch"
+                        v-for="(e, index) in showSearch"
                         :key="e.raw_poi_id"
                         :place="e"
                         :show-add="true"
-                        :index="0"
+                        :index="index"
                         context="search"
                         @submit-add-history="addUserHistory"
                         @focus-place="handleFocusPlace"

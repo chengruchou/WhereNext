@@ -21,12 +21,14 @@
   const mapRef = ref<any>(null)
   const layers = reactive({ hist: true, search: true, rec: true })
   const filters = [
-    { key: "hist", label: "History", color: "cyan-darken-2", icon: "mdi-history" },
-    { key: "search", label: "Search", color: "orange-darken-3", icon: "mdi-magnify" },
-    { key: "rec", label: "Model", color: "primary", icon: "mdi-chart-timeline-variant" },
+    { key: "hist", label: "History", color: "indigo-darken-4", icon: "mdi-history" },
+    { key: "search", label: "Search", color: "amber-darken-2", icon: "mdi-magnify" },
+    { key: "rec", label: "Model", color: "indigo-accent-4", icon: "mdi-chart-timeline-variant" },
   ] as const
 
   const showPoint = ref<GowallaPlace | null>(null)
+  const showPointIndex = ref(0)
+  const showPointContext = ref<"search" | "recommendation" | "history">("search")
   const showAdd = ref(true)
 
   const addHistory = async (place: GowallaPlace) => {
@@ -154,22 +156,32 @@
           :key="e.raw_poi_id"
           :options="{
             position: { lat: e.latitude, lng: e.longitude },
-            title: `${index + 1}. ${e.raw_poi_id} ${e.category_name}`,
+            title: `History ${index + 1}: ${e.category_name}`,
           }"
-          :pinOptions="{ background: 'cyan', glyphText: String(index + 1), glyphColor: 'black' }"
-          @click="((showPoint = e), (showAdd = false))" />
+          :pinOptions="{
+            background: '#470DFA',
+            glyphText: String(index + 1),
+            glyphColor: 'white',
+            borderColor: '#000000',
+            scale: 0.8,
+          }"
+          @click="((showPoint = e), (showAdd = false), (showPointIndex = index), (showPointContext = 'history'))" />
       </template>
 
       <template v-if="layers.search">
         <AdvancedMarker
-          v-for="e in props.showSearch"
+          v-for="(e, index) in props.showSearch"
           :key="'search-' + e.raw_poi_id"
           :options="{
             position: { lat: e.latitude, lng: e.longitude },
-            title: `${e.raw_poi_id} ${e.category_name}`,
+            title: `Search: ${e.category_name}`,
           }"
-          :pinOptions="{ background: 'orange' }"
-          @click="((showPoint = e), (showAdd = true))" />
+          :pinOptions="{
+            background: '#FF6D00',
+            borderColor: '#E65100',
+            scale: 0.7,
+          }"
+          @click="((showPoint = e), (showAdd = true), (showPointIndex = index), (showPointContext = 'search'))" />
       </template>
 
       <template v-if="layers.rec">
@@ -187,27 +199,31 @@
               :key="'rec-' + roundId + '-' + e.raw_poi_id"
               :options="{
                 position: { lat: e.latitude, lng: e.longitude },
-                title: `${index + 1}. ${e.raw_poi_id} ${e.category_name}`,
+                title: `Round ${roundId + 1} Rec ${index + 1}: ${e.category_name}`,
               }"
               :pinOptions="{
-                background: 'yellow',
-                glyphText: String(roundId + 1 + '-' + (index + 1)),
-                glyphColor: 'black',
+                background: '#2962FF',
+                glyphText: String(index + 1),
+                glyphColor: 'white',
+                borderColor: '#1A237E',
+                scale: 1.0,
               }"
-              @click="((showPoint = e), (showAdd = true))" />
+              @click="((showPoint = e), (showAdd = true), (showPointIndex = index), (showPointContext = 'recommendation'))" />
           </template>
           <template v-else-if="roundId < nowRecRound">
             <AdvancedMarker
               :options="{
                 position: { lat: es[0].latitude, lng: es[0].longitude },
-                title: `${roundId + 1}. ${es[0].raw_poi_id} ${es[0].category_name}`,
+                title: `Round ${roundId + 1}: ${es[0].category_name}`,
               }"
               :pinOptions="{
-                background: 'orange',
-                glyphText: String(roundId + 1 + '-1'),
-                glyphColor: 'black',
+                background: roundId === 0 ? '#9FA8DA' : '#7986CB',
+                glyphText: String(roundId + 1),
+                glyphColor: 'white',
+                borderColor: '#3F51B5',
+                scale: 0.7,
               }"
-              @click="((showPoint = es[0]), (showAdd = true))" />
+              @click="((showPoint = es[0]), (showAdd = true), (showPointIndex = 0), (showPointContext = 'recommendation'))" />
           </template>
         </template>
       </template>
@@ -222,7 +238,9 @@
           <PlaceCard
             :place="showPoint"
             :show-add="showAdd"
-            :index="0"
+            :index="showPointIndex"
+            :context="showPointContext"
+            compact
             @submit-add-history="addHistory(showPoint)" />
         </div>
       </InfoWindow>
@@ -231,6 +249,11 @@
 </template>
 
 <style scoped>
+  .map-canvas__info-card {
+    min-width: 220px;
+    max-width: 260px;
+  }
+
   .map-canvas {
     height: 100%;
     position: relative;
@@ -281,7 +304,6 @@
 
   .map-canvas__info-card {
     max-width: 320px;
-    zoom: 0.82;
   }
 
   @media (max-width: 700px) {
