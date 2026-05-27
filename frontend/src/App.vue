@@ -26,7 +26,7 @@
   const isExplaining = ref(false)
   const isChatPanelOpen = ref(false)
   const allCat = ref<string[]>([])
-  const activeEvidenceTab = ref<"history" | "search">("history")
+  const activeEvidenceTab = ref<"history" | "search" | "recommend">("history")
   
   // Map Layers State moved from MapCanvas
   const layers = ref({ hist: true, search: true, rec: true })
@@ -172,6 +172,7 @@
 
   const getNextPOI = async () => {
     isInferring.value = true
+    activeEvidenceTab.value = "recommend"
     try {
       for (let i = 0; i < 3; i++) {
         const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
@@ -248,98 +249,106 @@
       </v-chip>
     </v-app-bar>
 
-    <v-navigation-drawer v-model="drawer" permanent width="720" class="research-drawer">
-      <div class="research-drawer__grid">
-        <section class="research-drawer__column research-drawer__column--context">
-          <div class="research-drawer__controls">
-            <UserLogin @submit-user-id="fetchUserHistory" />
+    <v-navigation-drawer v-model="drawer" permanent width="420" class="research-drawer">
+      <div class="research-drawer__content">
+        <div class="research-drawer__controls">
+          <UserLogin @submit-user-id="fetchUserHistory" />
 
-            <SearchPanel
-              @submit-search-place-id="searchPlaceId"
-              @submit-search-place-cat="searchPlaceCat"
-              @clear-search-results="clearSearchResults"
-              :no-search-res="noSearchRes"
-              :all-cat="allCat" />
-          </div>
+          <SearchPanel
+            @submit-search-place-id="searchPlaceId"
+            @submit-search-place-cat="searchPlaceCat"
+            @clear-search-results="clearSearchResults"
+            :no-search-res="noSearchRes"
+            :all-cat="allCat" />
+        </div>
 
-          <section class="evidence-panel">
-            <v-tabs
-              v-model="activeEvidenceTab"
-              color="primary"
-              density="compact"
-              grow
-              class="evidence-panel__tabs">
-              <v-tab value="history" class="evidence-panel__tab">
-                History
-                <v-chip size="x-small" variant="tonal" color="secondary" class="ml-2">
-                  {{ userHistory.length }}
-                </v-chip>
-              </v-tab>
-              <v-tab value="search" class="evidence-panel__tab">
-                Search
-                <v-chip size="x-small" variant="tonal" color="warning" class="ml-2">
-                  {{ showSearch.length }}
-                </v-chip>
-              </v-tab>
-            </v-tabs>
+        <v-divider class="mb-4" />
 
-            <v-window v-model="activeEvidenceTab" class="evidence-panel__window">
-              <v-window-item value="history" class="evidence-panel__item">
-                <HistoryList
-                  :user-history="userHistory"
-                  @delete-all="delUserHistory"
-                  @delete-one="delOneHistory"
-                  @focus-place="handleFocusPlace" />
-              </v-window-item>
+        <section class="evidence-panel">
+          <v-tabs
+            v-model="activeEvidenceTab"
+            color="primary"
+            density="compact"
+            grow
+            class="evidence-panel__tabs">
+            <v-tab value="history" class="evidence-panel__tab">
+              History
+              <v-chip size="x-small" variant="tonal" color="secondary" class="ml-2">
+                {{ userHistory.length }}
+              </v-chip>
+            </v-tab>
+            <v-tab value="search" class="evidence-panel__tab">
+              Search
+              <v-chip size="x-small" variant="tonal" color="warning" class="ml-2">
+                {{ showSearch.length }}
+              </v-chip>
+            </v-tab>
+            <v-tab value="recommend" class="evidence-panel__tab">
+              Model
+              <v-chip size="x-small" variant="tonal" color="primary" class="ml-2">
+                {{ showRecommend.length }}/3
+              </v-chip>
+            </v-tab>
+          </v-tabs>
 
-              <v-window-item value="search" class="evidence-panel__item">
-                <section class="search-results">
-                  <div class="search-results__header">
-                    <div>
-                      <div class="text-overline text-warning font-weight-bold">Search Results</div>
-                      <h2 class="search-results__title">Retrieved Candidates</h2>
-                    </div>
+          <v-window v-model="activeEvidenceTab" class="evidence-panel__window">
+            <v-window-item value="history" class="evidence-panel__item">
+              <HistoryList
+                :user-history="userHistory"
+                @delete-all="delUserHistory"
+                @delete-one="delOneHistory"
+                @focus-place="handleFocusPlace" />
+            </v-window-item>
 
-                    <v-chip size="small" variant="tonal" color="warning" class="search-results__count">
-                      {{ showSearch.length }} POIs
-                    </v-chip>
+            <v-window-item value="search" class="evidence-panel__item">
+              <section class="search-results">
+                <div class="search-results__header">
+                  <div>
+                    <div class="text-overline text-warning font-weight-bold">Search Results</div>
+                    <h2 class="search-results__title">Retrieved Candidates</h2>
                   </div>
 
-                  <div class="search-results__body">
-                    <div v-if="!showSearch || showSearch.length === 0" class="search-results__empty">
-                      <v-icon icon="mdi-database-search-outline" size="30" color="warning" />
-                      <div class="search-results__empty-title">No retrieved candidates</div>
-                      <div class="search-results__empty-text">Search by POI ID or category.</div>
-                    </div>
+                  <v-chip size="small" variant="tonal" color="warning" class="search-results__count">
+                    {{ showSearch.length }} POIs
+                  </v-chip>
+                </div>
 
-                    <div v-else class="d-flex flex-column">
-                      <PlaceCard
-                        v-for="(e, index) in showSearch"
-                        :key="e.raw_poi_id"
-                        :place="e"
-                        :show-add="true"
-                        :index="index"
-                        context="search"
-                        @submit-add-history="addUserHistory"
-                        @focus-place="handleFocusPlace"
-                        density="compact" />
-                    </div>
+                <div class="search-results__body">
+                  <div v-if="!showSearch || showSearch.length === 0" class="search-results__empty">
+                    <v-icon icon="mdi-database-search-outline" size="30" color="warning" />
+                    <div class="search-results__empty-title">No retrieved candidates</div>
+                    <div class="search-results__empty-text">Search by POI ID or category.</div>
                   </div>
-                </section>
-              </v-window-item>
-            </v-window>
-          </section>
-        </section>
 
-        <section class="research-drawer__column research-drawer__column--model">
-          <RecommendPanel
-            :recommendations="showRecommend"
-            :is-inferring="isInferring"
-            :hist="userHistPlace"
-            @trigger-inference="getNextPOI"
-            @update-currentRound="nowRecRound = $event"
-            @focus-place="handleFocusPlace"
-            @submit-add-history="addUserHistory" />
+                  <div v-else class="d-flex flex-column">
+                    <PlaceCard
+                      v-for="(e, index) in showSearch"
+                      :key="e.raw_poi_id"
+                      :place="e"
+                      :show-add="true"
+                      :index="index"
+                      context="search"
+                      @submit-add-history="addUserHistory"
+                      @focus-place="handleFocusPlace"
+                      density="compact" />
+                  </div>
+                </div>
+              </section>
+            </v-window-item>
+
+            <v-window-item value="recommend" class="evidence-panel__item">
+              <div class="pa-1">
+                <RecommendPanel
+                  :recommendations="showRecommend"
+                  :is-inferring="isInferring"
+                  :hist="userHistPlace"
+                  @trigger-inference="getNextPOI"
+                  @update-currentRound="nowRecRound = $event"
+                  @focus-place="handleFocusPlace"
+                  @submit-add-history="addUserHistory" />
+              </div>
+            </v-window-item>
+          </v-window>
         </section>
       </div>
     </v-navigation-drawer>
@@ -392,29 +401,12 @@
     border-right: 1px solid rgba(var(--v-border-color), 0.18);
   }
 
-  .research-drawer__grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  .research-drawer__content {
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-height: 0;
-  }
-
-  .research-drawer__column {
-    min-height: 0;
     padding: 14px 14px 0;
-  }
-
-  .research-drawer__column--context {
-    border-right: 1px solid rgba(var(--v-border-color), 0.18);
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 0;
-  }
-
-  .research-drawer__column--model {
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 14px;
   }
 
   .research-drawer__controls {
@@ -439,6 +431,7 @@
     font-weight: 800;
     letter-spacing: 0;
     min-width: 0;
+    font-size: 0.75rem;
   }
 
   .evidence-panel__window {
@@ -530,15 +523,5 @@
   .research-main {
     min-height: 0;
   }
-
-  @media (max-width: 1200px) {
-    :deep(.research-drawer) {
-      width: 660px !important;
-    }
-
-    .research-drawer__column {
-      padding-left: 12px;
-      padding-right: 12px;
-    }
-  }
 </style>
+
