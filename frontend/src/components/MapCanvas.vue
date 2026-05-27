@@ -122,7 +122,7 @@
     <GoogleMap
       ref="mapRef"
       :api-key="apiKey"
-      map-id="CenterMap"
+      map-id="506622965fe133bac9a880a1"
       style="width: 100%; height: 100%"
       :center="center"
       :zoom="15"
@@ -144,7 +144,12 @@
             borderColor: '#000000',
             scale: 0.8,
           }"
-          @click="((showPoint = e), (showAdd = false), (showPointIndex = index), (showPointContext = 'history'))" />
+          @click="
+            ((showPoint = e),
+            (showAdd = false),
+            (showPointIndex = index),
+            (showPointContext = 'history'))
+          " />
       </template>
 
       <template v-if="props.layers.search">
@@ -160,7 +165,12 @@
             borderColor: '#E65100',
             scale: 0.7,
           }"
-          @click="((showPoint = e), (showAdd = true), (showPointIndex = index), (showPointContext = 'search'))" />
+          @click="
+            ((showPoint = e),
+            (showAdd = true),
+            (showPointIndex = index),
+            (showPointContext = 'search'))
+          " />
       </template>
 
       <template v-if="props.layers.rec">
@@ -187,7 +197,12 @@
                 borderColor: '#1A237E',
                 scale: 1.0,
               }"
-              @click="((showPoint = e), (showAdd = true), (showPointIndex = index), (showPointContext = 'recommendation'))" />
+              @click="
+                ((showPoint = e),
+                (showAdd = true),
+                (showPointIndex = index),
+                (showPointContext = 'recommendation'))
+              " />
           </template>
           <template v-else-if="roundId < nowRecRound">
             <AdvancedMarker
@@ -202,7 +217,12 @@
                 borderColor: '#3F51B5',
                 scale: 0.7,
               }"
-              @click="((showPoint = es[0]), (showAdd = true), (showPointIndex = 0), (showPointContext = 'recommendation'))" />
+              @click="
+                ((showPoint = es[0]),
+                (showAdd = true),
+                (showPointIndex = 0),
+                (showPointContext = 'recommendation'))
+              " />
           </template>
         </template>
       </template>
