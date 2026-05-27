@@ -226,7 +226,8 @@ class SessionGraph(Module):
         self.batch_size = opt.batchSize
         self.embedding = nn.Embedding(self.n_node, self.hidden_size, padding_idx=0, max_norm=1.5)
         self.pos_embedding = nn.Embedding(300, self.hidden_size, padding_idx=0, max_norm=1.5)
-        self.gnn = GNN(self.hidden_size, step=opt.step)
+        self.gnn_layers = getattr(opt, "ggnn_layers", opt.step)
+        self.gnn = GNN(self.hidden_size, step=self.gnn_layers)
 
         # Sparse Graph Attention
         self.is_dropout = True

@@ -179,7 +179,7 @@
 
 <template>
   <v-app>
-    <v-app-bar title="POI" color="secondary" density="compact">
+    <v-app-bar title="WhereNext" color="secondary" density="compact">
       <template v-slot:prepend>
         <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
       </template>
