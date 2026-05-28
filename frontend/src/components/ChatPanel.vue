@@ -133,11 +133,9 @@
 
 <style scoped>
   .xai-panel {
-    bottom: 24px;
-    position: absolute;
-    right: 24px;
-    width: 380px;
-    z-index: 2000;
+    margin-top: 14px;
+    width: 100%;
+    z-index: 10;
   }
 
   .xai-panel__card {
@@ -145,7 +143,6 @@
     backdrop-filter: blur(12px);
     border: 1px solid rgba(var(--v-border-color), 0.22) !important;
     border-radius: 12px !important;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
     overflow: hidden;
   }
 
@@ -176,7 +173,7 @@
   }
 
   .xai-panel__body {
-    height: 320px;
+    max-height: 400px;
     overflow-y: auto;
     padding: 16px;
     scrollbar-width: thin;

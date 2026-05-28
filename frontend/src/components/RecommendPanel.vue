@@ -54,7 +54,7 @@
 </script>
 
 <template>
-  <section class="recommend-panel d-flex flex-column h-100">
+  <section class="recommend-panel d-flex flex-column">
     <div class="recommend-panel__header">
       <div>
         <div class="text-overline text-primary font-weight-bold">Model Output</div>

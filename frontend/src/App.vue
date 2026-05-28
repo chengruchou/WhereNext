@@ -21,12 +21,13 @@
   const isInferring = ref(false)
   const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
   const focusedPlace = ref<GowallaPlace | null>(null)
-  const drawer = ref(true)
+  const leftDrawer = ref(true)
+  const rightDrawer = ref(true)
   const showStr = ref("")
   const isExplaining = ref(false)
   const isChatPanelOpen = ref(false)
   const allCat = ref<string[]>([])
-  const activeEvidenceTab = ref<"history" | "search" | "recommend">("history")
+  const activeEvidenceTab = ref<"history" | "search">("history")
   
   // Map Layers State moved from MapCanvas
   const layers = ref({ hist: true, search: true, rec: true })
@@ -172,7 +173,6 @@
 
   const getNextPOI = async () => {
     isInferring.value = true
-    activeEvidenceTab.value = "recommend"
     try {
       for (let i = 0; i < 3; i++) {
         const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
@@ -215,7 +215,7 @@
   <v-app class="research-app">
     <v-app-bar class="research-app__bar" color="surface" density="compact" elevation="1">
       <template v-slot:prepend>
-        <v-app-bar-nav-icon color="primary" @click="drawer = !drawer"></v-app-bar-nav-icon>
+        <v-app-bar-nav-icon color="primary" @click="leftDrawer = !leftDrawer"></v-app-bar-nav-icon>
       </template>
 
       <v-app-bar-title class="research-app__title">
@@ -247,9 +247,14 @@
       <v-chip size="small" variant="tonal" color="primary" class="research-app__time">
         {{ currentTime }}
       </v-chip>
+
+      <v-btn icon color="primary" @click="rightDrawer = !rightDrawer">
+        <v-icon>mdi-chart-timeline-variant</v-icon>
+      </v-btn>
     </v-app-bar>
 
-    <v-navigation-drawer v-model="drawer" permanent width="420" class="research-drawer">
+    <!-- Left Drawer: Context (Login, History, Search) -->
+    <v-navigation-drawer v-model="leftDrawer" permanent width="360" class="research-drawer research-drawer--left">
       <div class="research-drawer__content">
         <div class="research-drawer__controls">
           <UserLogin @submit-user-id="fetchUserHistory" />
@@ -281,12 +286,6 @@
               Search
               <v-chip size="x-small" variant="tonal" color="warning" class="ml-2">
                 {{ showSearch.length }}
-              </v-chip>
-            </v-tab>
-            <v-tab value="recommend" class="evidence-panel__tab">
-              Model
-              <v-chip size="x-small" variant="tonal" color="primary" class="ml-2">
-                {{ showRecommend.length }}/3
               </v-chip>
             </v-tab>
           </v-tabs>
@@ -335,21 +334,25 @@
                 </div>
               </section>
             </v-window-item>
-
-            <v-window-item value="recommend" class="evidence-panel__item">
-              <div class="pa-1">
-                <RecommendPanel
-                  :recommendations="showRecommend"
-                  :is-inferring="isInferring"
-                  :hist="userHistPlace"
-                  @trigger-inference="getNextPOI"
-                  @update-currentRound="nowRecRound = $event"
-                  @focus-place="handleFocusPlace"
-                  @submit-add-history="addUserHistory" />
-              </div>
-            </v-window-item>
           </v-window>
         </section>
+      </div>
+    </v-navigation-drawer>
+
+    <!-- Right Drawer: Model Recommendations -->
+    <v-navigation-drawer v-model="rightDrawer" location="right" permanent width="360" class="research-drawer research-drawer--right">
+      <div class="research-drawer__content">
+        <RecommendPanel
+          class="flex-grow-1"
+          :recommendations="showRecommend"
+          :is-inferring="isInferring"
+          :hist="userHistPlace"
+          @trigger-inference="getNextPOI"
+          @update-currentRound="nowRecRound = $event"
+          @focus-place="handleFocusPlace"
+          @submit-add-history="addUserHistory" />
+        
+        <ChatPanel v-model="isChatPanelOpen" :show-str="showStr" :is-explaining="isExplaining" />
       </div>
     </v-navigation-drawer>
 
@@ -362,7 +365,6 @@
         :focused-place="focusedPlace"
         :layers="layers"
         @submit-add-history="addUserHistory" />
-      <ChatPanel v-model="isChatPanelOpen" :show-str="showStr" :is-explaining="isExplaining" />
     </v-main>
   </v-app>
 </template>
@@ -398,7 +400,15 @@
   }
 
   .research-drawer {
+    background: rgb(var(--v-theme-surface));
+  }
+
+  .research-drawer--left {
     border-right: 1px solid rgba(var(--v-border-color), 0.18);
+  }
+
+  .research-drawer--right {
+    border-left: 1px solid rgba(var(--v-border-color), 0.18);
   }
 
   .research-drawer__content {
@@ -406,7 +416,7 @@
     flex-direction: column;
     height: 100%;
     min-height: 0;
-    padding: 14px 14px 0;
+    padding: 14px;
   }
 
   .research-drawer__controls {
@@ -524,4 +534,3 @@
     min-height: 0;
   }
 </style>
-
