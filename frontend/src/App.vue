@@ -219,7 +219,7 @@
       </template>
 
       <v-app-bar-title class="research-app__title">
-        Trajectory-aware POI Recommendation
+        <span class="text-primary">where</span><span class="text-on-surface">next</span>
       </v-app-bar-title>
 
       <v-spacer />
@@ -379,10 +379,11 @@
   }
 
   .research-app__title {
-    color: rgb(var(--v-theme-on-surface));
-    font-size: 0.96rem;
+    font-size: 1.25rem;
     font-weight: 800;
-    letter-spacing: 0;
+    letter-spacing: -0.03em;
+    text-transform: lowercase;
+    opacity: 0.9;
   }
 
   .research-app__time {

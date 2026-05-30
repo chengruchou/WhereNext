@@ -1,6 +1,7 @@
 <script lang="ts" setup>
   import { computed, ref } from "vue"
   import type { GowallaPlace } from "@/types/place"
+  import POIDetailDialog from "./POIDetailDialog.vue"
 
   const props = withDefaults(
     defineProps<{
@@ -16,6 +17,7 @@
     },
   )
   const expand = ref(false)
+  const showDetailDialog = ref(false)
   const emit = defineEmits<{
     (e: "submit-add-history", payload: { passPlace: GowallaPlace | null }): void
     (e: "focus-place", payload: { focusPlace: GowallaPlace | null }): void
@@ -30,8 +32,7 @@
   }
 
   const openDetail = () => {
-    if (!props.place) return
-    window.open(`http://127.0.0.1:5000/api/poi/detail/${props.place.raw_poi_id}`, "_blank")
+    showDetailDialog.value = true
   }
 
   const rankLabel = computed(() => {
@@ -90,10 +91,10 @@
       <template #prepend>
         <v-avatar
           class="place-card__rank"
-          :color="isRecommendation ? 'primary' : 'surface-variant'"
+          :color="isRecommendation ? 'primary' : 'secondary'"
           variant="flat"
           :size="props.compact ? 32 : 44">
-          <span class="place-card__rank-label">{{ rankLabel }}</span>
+          <span class="place-card__rank-label text-white">{{ rankLabel }}</span>
         </v-avatar>
       </template>
 
@@ -175,11 +176,13 @@
             block
             prepend-icon="mdi-open-in-new"
             @click.stop="openDetail">
-            Show Detail
+            View Semantic Profile
           </v-btn>
         </v-card-actions>
       </div>
     </v-expand-transition>
+
+    <POIDetailDialog v-model="showDetailDialog" :place="props.place" />
   </v-card>
 </template>
 
@@ -232,13 +235,13 @@
   }
 
   .place-card__rank {
-    border: 1px solid rgba(var(--v-theme-primary), 0.32);
+    border: 1px solid rgba(var(--v-theme-on-surface), 0.12);
     flex-shrink: 0;
     letter-spacing: 0;
   }
 
   .place-card__rank-label {
-    color: rgb(var(--v-theme-on-surface));
+    color: inherit;
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0;
