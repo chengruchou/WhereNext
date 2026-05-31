@@ -58,3 +58,6 @@ uv.log
 /backend/tests
 frontend/package-lock.json
 frontend/package.json
+backend/routes/chat_api_multi.py
+AGENTS.md
+GEMINI.md
