@@ -39,6 +39,7 @@ def get_route():
     points = rq["points"]
     time = rq["time"]
     type = rq["type"]
+
     time_utc = datetime.fromisoformat(time.replace("Z", "+00:00"))
     time_taiwan = time_utc.astimezone(ZoneInfo("Asia/Taipei")) + timedelta(minutes=1)
     time_str = time_taiwan.isoformat()
@@ -52,11 +53,12 @@ def get_route():
         "destination": destination,
         "travelMode": type,
         "polylineEncoding": "ENCODED_POLYLINE",
-        "departureTime": time_str,
     }
 
     if type != "TRANSIT":
         payload["intermediates"] = intermediates
+    else:
+        payload["departureTime"] = time_str
 
     headers = {
         "Content-Type": "application/json",
