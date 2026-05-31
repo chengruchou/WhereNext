@@ -8,24 +8,24 @@ Supported input modes:
 1) Internal item-id session directly:
     python infer_sbr.py \
         --dataset Gowalla \
-        --checkpoint ./save_model/Demo_model_exp30_Gowalla_512_seed_2023-last_k_4_best_model.pt \
+        --checkpoint ./checkpoints/weight.pt \
         --session 12,45,91,203 \
         --topk 10
 
 2) Internal item-id session from txt:
     python infer_sbr.py \
         --dataset Gowalla \
-        --checkpoint ./save_model/Demo_model_exp30_Gowalla_512_seed_2023-last_k_4_best_model.pt \
+        --checkpoint ./checkpoints/weight.pt \
         --session_file ./session.txt \
         --topk 10
 
 3) Raw Gowalla visit-path txt:
     python infer_sbr.py \
         --dataset Gowalla \
-        --checkpoint ./save_model/Demo_model_exp30_Gowalla_512_seed_2023-last_k_4_best_model.pt \
-        --gowalla_visit_file ./raw_path.txt \
-        --mapping_json ./artifacts/raw_location2item.json \
-        --reverse_mapping_json ./artifacts/item2raw_location.json \
+        --checkpoint ./checkpoints/weight.pt \
+        --gowalla_visit_file ./examples/example_visit.txt \
+        --mapping_json ./datasets/Gowalla/raw_location2item.json \
+        --reverse_mapping_json ./datasets/Gowalla/item2raw_location.json \
         --topk 10
 
 Notes:
@@ -81,7 +81,7 @@ def build_opt_from_args(args: argparse.Namespace) -> SimpleNamespace:
 
     # core
     opt.dataset = args.dataset
-    opt.batchSize = 1
+    opt.batchSize = getattr(args, "batchSize", 1)
     opt.hiddenSize = args.hiddenSize
     opt.epochs = 0
     opt.lr = args.lr
@@ -89,6 +89,7 @@ def build_opt_from_args(args: argparse.Namespace) -> SimpleNamespace:
     opt.lr_dc_step = args.lr_dc_step
     opt.l2 = args.l2
     opt.step = args.step
+    opt.ggnn_layers = args.ggnn_layers
     opt.patience = 3
     opt.validation = False
     opt.valid_portion = 0.2
@@ -115,6 +116,10 @@ def build_opt_from_args(args: argparse.Namespace) -> SimpleNamespace:
         opt.step = 2
     elif opt.dataset == "Gowalla":
         opt.last_k = 4
+    if opt.ggnn_layers is None:
+        opt.ggnn_layers = opt.step
+    else:
+        opt.step = opt.ggnn_layers
 
     return opt
 
@@ -314,7 +319,12 @@ def truncate_and_pad_session(session: List[int], max_len: int) -> Tuple[np.ndarr
     return np.asarray(padded, dtype=np.int64), np.asarray(mask, dtype=np.int64)
 
 
-def build_single_sample(session: List[int], max_len: int) -> Dict[str, torch.Tensor]:
+def build_single_sample(
+    session: List[int],
+    max_len: int,
+    target: int = 1,
+    index: int = 0,
+) -> Dict[str, torch.Tensor]:
     """
     Reproduce DataSampler.get_data() / __getitem__() format for a single inference sample.
 
@@ -325,7 +335,8 @@ def build_single_sample(session: List[int], max_len: int) -> Dict[str, torch.Ten
 
     Important:
     - np.unique sorts values. We intentionally keep the same behavior for compatibility.
-    - targets is a dummy placeholder during inference.
+    - targets/index default to placeholders during inference, but can be supplied
+      by parity/debug callers.
     """
     u_input, mask = truncate_and_pad_session(session, max_len=max_len)
 
@@ -337,9 +348,9 @@ def build_single_sample(session: List[int], max_len: int) -> Dict[str, torch.Ten
         "alias_inputs": torch.tensor(alias_inputs, dtype=torch.long).unsqueeze(0),
         "items": torch.tensor(items, dtype=torch.long).unsqueeze(0),
         "mask": torch.tensor(mask, dtype=torch.long).unsqueeze(0),
-        "targets": torch.tensor([1], dtype=torch.long),  # dummy target
+        "targets": torch.tensor([target], dtype=torch.long),
         "inputs": torch.tensor(u_input, dtype=torch.long).unsqueeze(0),
-        "index": torch.tensor([0], dtype=torch.long),    # dummy index
+        "index": torch.tensor([index], dtype=torch.long),
     }
     return sample
 
@@ -483,7 +494,7 @@ def build_argparser() -> argparse.ArgumentParser:
 
     # inference behavior
     parser.add_argument("--topk", type=int, default=10, help="Number of predictions to return")
-    parser.add_argument("--exclude_seen", action="store_true", default=True,
+    parser.add_argument("--exclude_seen", action="store_true",
                         help="Exclude items already appearing in the input session")
     parser.add_argument("--device", type=str, default="cuda",
                         choices=["cuda", "cpu"], help="Inference device")
@@ -491,12 +502,15 @@ def build_argparser() -> argparse.ArgumentParser:
                         help="Optional path to save predictions as JSON")
 
     # model hyperparameters: must match training
+    parser.add_argument("--batchSize", type=int, default=1)
     parser.add_argument("--hiddenSize", type=int, default=256)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--lr_dc", type=float, default=0.1)
     parser.add_argument("--lr_dc_step", type=int, default=5)
     parser.add_argument("--l2", type=float, default=1e-5)
     parser.add_argument("--step", type=int, default=1)
+    parser.add_argument("--ggnn_layers", type=int, default=None,
+                        help="Number of GGNN propagation/message-passing layers; defaults to dataset-specific --step")
     parser.add_argument("--gama", type=float, default=1.7)
     parser.add_argument("--num_attention_heads", type=int, default=4)
     parser.add_argument("--neighbor_n", type=int, default=3)
