@@ -75,10 +75,11 @@
     async () => {
       showPath.value = await fetchRoutePath(
         props.points,
-        props.type === "hist" ? "WALK" : "TRANSIT"
+        // props.type === "hist" ? "WALK" : "TRANSIT"
+        "DRIVE",
       )
     },
-    { immediate: true }
+    { immediate: true },
   )
 
   const formatTime = (time: string | null) => {
@@ -89,7 +90,9 @@
     const day = Math.floor(hour / 24)
     if (day > 0) return day + " day"
     if (hour > 0) return hour + " hr " + (min % 60 === 0 ? "" : (min % 60) + " min")
-    return (min % 60 === 0 ? "" : (min % 60) + " min ") + (sec % 60 === 0 ? "" : (sec % 60) + " sec")
+    return (
+      (min % 60 === 0 ? "" : (min % 60) + " min ") + (sec % 60 === 0 ? "" : (sec % 60) + " sec")
+    )
   }
 </script>
 
@@ -103,12 +106,11 @@
         strokeOpacity: isHovering ? 0.8 : 1,
         strokeWeight: isHovering ? 10 : 7,
         zIndex: 1,
-        cursor: 'pointer'
+        cursor: 'pointer',
       }"
       @click="handleRouteClick"
       @mouseover="isHovering = true"
-      @mouseout="isHovering = false"
-    />
+      @mouseout="isHovering = false" />
     <Polyline
       :options="{
         path: showPath.path,
@@ -116,28 +118,31 @@
         strokeOpacity: 1,
         strokeWeight: isHovering ? 7 : 5,
         zIndex: 2,
-        cursor: 'pointer'
+        cursor: 'pointer',
       }"
       @click="handleRouteClick"
       @mouseover="isHovering = true"
-      @mouseout="isHovering = false"
-    />
+      @mouseout="isHovering = false" />
     <InfoWindow
       v-if="infoPosition && showPath.duration !== '0s' && !closeRoute && showInfo"
-      :options="{ position: infoPosition, headerDisabled: true }"
-    >
+      :options="{ position: infoPosition, headerDisabled: true }">
       <div class="route-info-window">
-        <v-icon 
-          :icon="showPath.type == 'WALK' ? 'mdi-walk' : 'mdi-bus-multiple'" 
-          size="25" 
-          color="#333333"
-        />
-        <div style="color: #333333 !important;">
+        <v-icon
+          :icon="
+            showPath.type === 'DRIVE'
+              ? 'mdi-car'
+              : showPath.type === 'WALK'
+                ? 'mdi-walk'
+                : 'mdi-bus-multiple'
+          "
+          size="25"
+          color="#333333" />
+        <div style="color: #333333 !important">
           {{ formatTime(showPath.duration) }}<br />
           {{
             showPath.distance > 1000
-              ? (showPath.distance / 1000).toFixed(2) + ' km '
-              : showPath.distance + ' m '
+              ? (showPath.distance / 1000).toFixed(2) + " km "
+              : showPath.distance + " m "
           }}
         </div>
         <v-btn
@@ -145,8 +150,7 @@
           size="10"
           class="mx-1 route-info-window__close"
           variant="text"
-          @click="showInfo = false"
-        />
+          @click="showInfo = false" />
       </div>
     </InfoWindow>
   </template>

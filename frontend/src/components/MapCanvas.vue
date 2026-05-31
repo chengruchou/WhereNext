@@ -183,26 +183,27 @@
 
         <template v-for="(es, roundId) in props.showRecommend">
           <template v-if="roundId == nowRecRound">
-            <AdvancedMarker
-              v-for="(e, index) in es"
-              :key="'rec-' + roundId + '-' + e.raw_poi_id"
-              :options="{
-                position: { lat: e.latitude, lng: e.longitude },
-                title: `Round ${roundId + 1} Rec ${index + 1}: ${e.category_name}`,
-              }"
-              :pinOptions="{
-                background: '#2962FF',
-                glyphText: String(index + 1),
-                glyphColor: 'white',
-                borderColor: '#1A237E',
-                scale: 1.0,
-              }"
-              @click="
-                ((showPoint = e),
-                (showAdd = true),
-                (showPointIndex = index),
-                (showPointContext = 'recommendation'))
-              " />
+            <template v-for="(e, index) in es" :key="'rec-' + roundId + '-' + e.raw_poi_id">
+              <AdvancedMarker
+                v-if="index === 0 || (props.focusedPlace && props.focusedPlace.raw_poi_id === e.raw_poi_id)"
+                :options="{
+                  position: { lat: e.latitude, lng: e.longitude },
+                  title: `Round ${roundId + 1} Rec ${index + 1}: ${e.category_name}`,
+                }"
+                :pinOptions="{
+                  background: '#2962FF',
+                  glyphText: index === 0 ? String(roundId + 1) : String(index + 1),
+                  glyphColor: 'white',
+                  borderColor: '#1A237E',
+                  scale: index === 0 ? 1.0 : 0.7,
+                }"
+                @click="
+                  ((showPoint = e),
+                  (showAdd = true),
+                  (showPointIndex = index),
+                  (showPointContext = 'recommendation'))
+                " />
+            </template>
           </template>
           <template v-else-if="roundId < nowRecRound">
             <AdvancedMarker
@@ -215,7 +216,7 @@
                 glyphText: String(roundId + 1),
                 glyphColor: 'white',
                 borderColor: '#3F51B5',
-                scale: 0.7,
+                scale: 0.9,
               }"
               @click="
                 ((showPoint = es[0]),
