@@ -18,7 +18,7 @@
 
   const stateLabel = computed(() => isLoggedIn.value ? "Context loaded" : "Awaiting user")
   const stateColor = computed(() => isLoggedIn.value ? "success" : "primary")
-  const actionLabel = computed(() => isLoggedIn.value ? "Clear" : "Load")
+  const actionLabel = computed(() => isLoggedIn.value ? "Logout" : "Login")
 
   const toggleLogin = async () => {
     if (isLoggedIn.value) {
