@@ -49,7 +49,7 @@
   const actionLabel = computed(() => {
     if (props.isInferring) return "Running inference"
     if (isComplete.value) return "Generated"
-    return "Run recommendation model"
+    return "Get next POIs"
   })
 </script>
 
