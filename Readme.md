@@ -183,7 +183,7 @@ Large model artifacts such as `.pt` checkpoints and semantic embeddings should n
 Clone the repository:
 
 ```bash
-git clone https://github.com/<your-user-or-org>/POI_System.git
+git clone https://github.com/chengruchou/WhereNext.git
 cd POI_System
 ```
 
@@ -402,7 +402,7 @@ For academic results, please refer to the paper. If a separate evaluation reposi
 
 ## Citation
 
-If you use this system, please cite:
+<!-- If you use this system, please cite:
 
 ```bibtex
 @inproceedings{chou2026wherenext,
@@ -411,7 +411,7 @@ If you use this system, please cite:
   booktitle = {Proceedings of the 35th International ACM Conference on Knowledge and Information Management},
   year      = {2026}
 }
-```
+``` -->
 
 The deployed SBR backbone is based on MG-DSGAT:
 
