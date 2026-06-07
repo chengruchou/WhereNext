@@ -194,6 +194,21 @@ cd backend
 uv sync
 ```
 
+Download the pretrained model checkpoint from the following [link](https://drive.google.com/file/d/1TOCfHrGnm9WyyLQV_lV2U43T0ccYDL2B/view?usp=drive_link)
+
+
+Place the downloaded checkpoint file under the following directory:
+
+```bash
+backend/model_core/MG-DSGAT/checkpoints/
+```
+
+The expected checkpoint path is:
+
+```bash
+backend/model_core/MG-DSGAT/checkpoints/weight.pt
+```
+
 Install frontend dependencies:
 
 ```bash
