@@ -18,6 +18,9 @@ from services.model_config import RecommendationConfig
 
 logger = logging.getLogger(__name__)
 
+# Reranked rows, then the stage status ("ran", "skipped", "failed") and its detail.
+StageResult = tuple[list[dict[str, Any]], str, str | None]
+
 
 def _module_is_from_path(module: ModuleType | None, root: Path) -> bool:
     if module is None:
@@ -308,9 +311,11 @@ class SpatialReranker:
         self,
         history_raw_ids: list[int],
         candidates: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
-        if not self.config.enable_spatial or not candidates:
-            return _normalize_prediction_rows(candidates, self.raw2item)
+    ) -> StageResult:
+        if not self.config.enable_spatial:
+            return _normalize_prediction_rows(candidates, self.raw2item), "skipped", "disabled"
+        if not candidates:
+            return [], "skipped", "no candidates"
         try:
             self._ensure_loaded()
             expanded = self._expand_candidates(
@@ -325,10 +330,10 @@ class SpatialReranker:
                 alpha_sbr=self.config.alpha_sbr,
                 alpha_spatial=self.config.alpha_spatial,
             )
-            return _normalize_prediction_rows(ranked, self.raw2item)
+            return _normalize_prediction_rows(ranked, self.raw2item), "ran", None
         except Exception as exc:
-            logger.warning("Spatial reranking skipped: %s", exc)
-            return _normalize_prediction_rows(candidates, self.raw2item)
+            logger.warning("Spatial reranking failed: %s", exc)
+            return _normalize_prediction_rows(candidates, self.raw2item), "failed", str(exc)
 
     def _ensure_loaded(self) -> None:
         if self._loaded:
@@ -365,7 +370,7 @@ class SemanticReranker:
         self,
         history_raw_ids: list[int],
         candidates: list[dict[str, Any]],
-    ) -> list[dict[str, Any]]:
+    ) -> StageResult:
         enabled = bool(self.config.enable_semantic)
         embedding_exists = self.config.semantic_embedding_path.exists()
         manifest_path = self._resolve_manifest_path()
@@ -377,9 +382,17 @@ class SemanticReranker:
             manifest_exists,
             len(candidates),
         )
-        if not enabled or not candidates:
-            logger.info("Semantic reranking skipped; final candidate count=%s", len(candidates))
-            return _normalize_prediction_rows(candidates, self.raw2item)
+        if not enabled:
+            return _normalize_prediction_rows(candidates, self.raw2item), "skipped", "disabled"
+        if not candidates:
+            return [], "skipped", "no candidates"
+        if not embedding_exists:
+            logger.warning(
+                "Semantic reranking skipped: embedding file not found: %s",
+                self.config.semantic_embedding_path,
+            )
+            detail = f"embedding file not found: {self.config.semantic_embedding_path.name}"
+            return _normalize_prediction_rows(candidates, self.raw2item), "skipped", detail
 
         try:
             self._ensure_loaded(manifest_path)
@@ -400,12 +413,10 @@ class SemanticReranker:
             )
             rows = _normalize_prediction_rows(ranked + tail, self.raw2item)
             logger.info("Semantic reranking succeeded; final candidate count=%s", len(rows))
-            return rows
+            return rows, "ran", None
         except Exception as exc:
-            logger.warning("Semantic reranking skipped: %s", exc)
-            rows = _normalize_prediction_rows(candidates, self.raw2item)
-            logger.info("Semantic reranking skipped; final candidate count=%s", len(rows))
-            return rows
+            logger.warning("Semantic reranking failed: %s", exc)
+            return _normalize_prediction_rows(candidates, self.raw2item), "failed", str(exc)
 
     def _raw_ids_to_item_ids(self, raw_ids: list[int]) -> list[int]:
         item_ids: list[int] = []

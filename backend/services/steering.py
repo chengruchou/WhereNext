@@ -1,0 +1,209 @@
+"""Steer the ranked candidate pool with a parsed intent.
+
+final = (1 - lambda) * base + lambda * intent + epsilon * novelty
+
+base is the score the pipeline already ranked by (SBR, spatial and semantic
+fusion), so lambda = epsilon = 0 reproduces the pipeline's order. intent is the
+graded relevance of the POI's category to the wanted phrases (intent_signal.py);
+without scores it falls back to 1 for a wanted category and 0 otherwise.
+novelty is 1 minus the share of the user's trajectory spent in the POI's
+category. Before scoring, POIs in avoided categories or beyond max_hop_km are
+removed, and the nearest POIs in the wanted categories join the pool, since the
+backbone may propose none of them.
+"""
+
+from __future__ import annotations
+
+import json
+from collections import Counter
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+from contracts.intent import Intent, SteeringControls
+from services.evidence_builder import base_signals, haversine_km, normalized_sbr_by_raw_id
+from services.intent_signal import IntentScores
+from services.model_config import RecommendationConfig
+
+
+@dataclass(frozen=True)
+class PoiPoint:
+    raw_id: int
+    lat: float
+    lng: float
+    category: str | None
+
+
+class PoiIndex:
+    """Coordinates and categories of every POI in the metadata, grouped by category."""
+
+    def __init__(self, points: list[PoiPoint]):
+        self.points = {point.raw_id: point for point in points}
+        self.by_category: dict[str, list[PoiPoint]] = {}
+        for point in points:
+            if point.category:
+                self.by_category.setdefault(point.category, []).append(point)
+
+    @classmethod
+    def from_metadata(cls, path: Path) -> PoiIndex:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        rows = payload.values() if isinstance(payload, dict) else payload
+        return cls(
+            [
+                PoiPoint(
+                    raw_id=int(row["raw_poi_id"]),
+                    lat=float(row["latitude"]),
+                    lng=float(row["longitude"]),
+                    category=row.get("category_name") or None,
+                )
+                for row in rows
+            ]
+        )
+
+    def nearest_in_categories(
+        self,
+        categories: list[str],
+        origin: PoiPoint,
+        k: int,
+        radius_km: float,
+        exclude: set[int],
+    ) -> list[tuple[float, PoiPoint]]:
+        found = []
+        for category in dict.fromkeys(categories):
+            for point in self.by_category.get(category, []):
+                if point.raw_id in exclude:
+                    continue
+                distance = haversine_km(origin.lat, origin.lng, point.lat, point.lng)
+                if distance <= radius_km:
+                    found.append((distance, point))
+        found.sort(key=lambda item: (item[0], item[1].raw_id))
+        return found[:k]
+
+
+def needs_steering(intent: Intent | None, controls: SteeringControls) -> bool:
+    return intent is not None or controls.habit_intent > 0 or controls.explore > 0
+
+
+def steer(
+    rows: list[dict[str, Any]],
+    *,
+    intent: Intent | None,
+    controls: SteeringControls,
+    session_ids: list[int],
+    index: PoiIndex,
+    raw2item: dict[int, int],
+    config: RecommendationConfig,
+    spatial_ran: bool,
+    intent_scores: IntentScores | None = None,
+    signal_method: str = "category match",
+) -> tuple[list[dict[str, Any]], str]:
+    """Return the re-ranked pool and a one-line summary for the stage status.
+
+    intent_scores maps category name to (value, raw similarity); None means a
+    binary category match.
+    """
+
+    origin = index.points.get(session_ids[-1]) if session_ids else None
+    want = [match.category_name for match in intent.want] if intent else []
+    avoid = {match.category_name for match in intent.avoid} if intent else set()
+    max_hop_km = intent.max_hop_km if intent else None
+    lam, eps = controls.habit_intent, controls.explore
+
+    pool = [dict(row) for row in rows]
+    added = 0
+    if want and lam > 0 and origin is not None and config.intent_k > 0:
+        exclude = {int(row["raw_poi_id"]) for row in pool}
+        if config.exclude_seen:
+            exclude.update(session_ids)
+        nearest = index.nearest_in_categories(
+            want,
+            origin,
+            k=config.intent_k,
+            radius_km=max_hop_km or config.intent_radius_km,
+            exclude=exclude,
+        )
+        for distance, point in nearest:
+            spatial_score = 1.0 / (1.0 + distance)
+            row = {
+                "raw_poi_id": point.raw_id,
+                "raw_location_id": point.raw_id,
+                "item_id": raw2item.get(point.raw_id),
+                "candidate_source": "intent",
+                "sbr_score": None,
+                "normalized_sbr_score": 0.0,
+                "spatial_score": spatial_score,
+                "distance_km": distance,
+            }
+            if spatial_ran:
+                # Same formula the spatial stage applies to its neighbors.
+                row["spatial_fusion_score"] = float(config.alpha_spatial) * spatial_score
+            pool.append(row)
+            added += 1
+
+    kept = []
+    avoided = too_far = 0
+    for row in pool:
+        point = index.points.get(int(row["raw_poi_id"]))
+        category = point.category if point else None
+        if category in avoid:
+            avoided += 1
+            continue
+        if origin is not None and point is not None:
+            row["hop_km"] = haversine_km(origin.lat, origin.lng, point.lat, point.lng)
+            if max_hop_km is not None and row["hop_km"] > max_hop_km:
+                too_far += 1
+                continue
+        row["category_name"] = category
+        kept.append(row)
+
+    # Normalize SBR scores over the pool the pipeline produced, before any removal,
+    # and store them so the evidence builder decomposes the same numbers.
+    fallback_habit = normalized_sbr_by_raw_id(rows)
+    visits = Counter(
+        index.points[raw_id].category for raw_id in session_ids if raw_id in index.points
+    )
+    for row in kept:
+        if row.get("normalized_sbr_score") is None:
+            row["normalized_sbr_score"] = fallback_habit.get(int(row["raw_poi_id"]), 0.0)
+        base = sum(s.contribution for s in base_signals(row, config, {}).values())
+        score = (1.0 - lam) * base
+        if want and lam > 0:
+            if intent_scores is None:
+                value, raw = (1.0 if row["category_name"] in want else 0.0), None
+            else:
+                value, raw = intent_scores.get(row["category_name"], (0.0, None))
+            row["intent_value"] = value
+            row["intent_similarity"] = raw
+            score += lam * value
+        if eps > 0:
+            share = visits[row["category_name"]] / len(session_ids) if session_ids else 0.0
+            row["novelty_value"] = 1.0 - share
+            score += eps * row["novelty_value"]
+        if intent is not None:
+            row["intent_matched"] = [row["category_name"]] if row["category_name"] in want else []
+        row["steer_base_score"] = base
+        row["steer_score"] = score
+
+    kept.sort(
+        key=lambda row: (
+            -row["steer_score"],
+            -row["steer_base_score"],
+            row.get("hop_km", float("inf")),
+            int(row["raw_poi_id"]),
+        )
+    )
+    for rank, row in enumerate(kept, start=1):
+        row["rank"] = rank
+
+    parts = [f"lambda={lam:g}", f"epsilon={eps:g}"]
+    if want and lam > 0:
+        parts.append(f"intent signal: {signal_method}")
+    if added:
+        parts.append(f"{added} intent candidates added")
+    if avoided:
+        parts.append(f"{avoided} in avoided categories removed")
+    if too_far:
+        parts.append(f"{too_far} beyond {max_hop_km:g} km removed")
+    if origin is None:
+        parts.append("no origin coordinates; distance rules not applied")
+    return kept, "; ".join(parts)
