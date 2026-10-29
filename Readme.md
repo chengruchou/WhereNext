@@ -135,7 +135,7 @@ cp backend/.env.example backend/.env
 Example `backend/.env`:
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key
+ANTHROPIC_API_KEY=your_anthropic_api_key
 GOOGLE_MAPS_API_KEY=your_google_maps_api_key
 
 DATABASE_URL=sqlite:///app.db
@@ -312,6 +312,26 @@ POST /api/model/genpoi/<user_id>
 
 The backend retrieves the user trajectory, maps raw POI IDs to internal item IDs, runs the deployed SBR backbone, applies spatial and semantic reranking, hydrates the final POI objects, and returns them to the frontend.
 
+### Request and Route Recommendation API
+
+Used when the user describes what they want and asks for a multi-stop route.
+
+```text
+POST /api/intent/parse
+POST /api/model/route/<user_id>
+```
+
+`/api/intent/parse` turns a request such as "museums, nothing with coffee" into an `Intent` whose place types exist in the POI data. `/api/model/route/<user_id>` plans every stop in one call and returns the candidates per stop with per-stop evidence: score parts, distance from the previous stop, and whether each pipeline stage ran.
+
+When places of the requested types are within reach of the previous stop, only those are kept, so the request decides each stop and the user's habits rank within it. Reach is the request's own distance limit, else it depends on the travel mode. When nothing of the requested types is within reach, the stops follow the user's habits and the evidence says so.
+
+```text
+WHERENEXT_REACH_WALK_KM=2
+WHERENEXT_REACH_TRANSIT_KM=15
+WHERENEXT_REACH_DRIVE_KM=40
+WHERENEXT_INTENT_FILTER=true    # false ranks by the weighted score alone
+```
+
 ### Route Planning API
 
 Used by the frontend to request planned routes.
@@ -327,10 +347,11 @@ This endpoint proxies route-planning requests to the Google Routes API and retur
 Used to generate route-level recommendation rationales.
 
 ```text
+POST /api/chat/grounded
 POST /api/chat/explain
 ```
 
-The backend sends historical POIs and recommended POIs to the LLM provider and returns a Markdown explanation to the frontend.
+`/api/chat/grounded` takes a route's evidence and returns sentences that each cite the evidence values they rely on. Every sentence is checked against what it cites; sentences the data does not support are dropped, and the response says how many were checked. `/api/chat/explain` returns a free-text Markdown explanation built from the historical and recommended POIs.
 
 ---
 
@@ -363,7 +384,7 @@ The system design can be adapted to other SBR backbones if they provide ranked c
 
 WhereNext uses the Google Maps API for map rendering, marker display, and route planning. A valid Google Maps API key is required.
 
-WhereNext uses an LLM provider to generate route-level explanations. The current implementation uses Gemini. A valid API key is required for explanation generation.
+WhereNext uses the Claude API to read natural-language requests (`/api/intent/parse`) and to write route-level explanations (`/api/chat/grounded` and `/api/chat/explain`). Both use `claude-opus-5-5` by default; set `WHERENEXT_INTENT_MODEL` or `WHERENEXT_EXPLAIN_MODEL` to change the model. Credentials come from `ANTHROPIC_API_KEY` (or an `ant auth login` profile). Without them, request parsing falls back to a built-in keyword parser and explanations are unavailable.
 
 LLM outputs may vary across runs. They are intended for qualitative route explanation and should not be treated as benchmark evidence.
 
@@ -373,9 +394,9 @@ API calls to Google Maps and LLM providers may incur cost depending on your acco
 
 ## Troubleshooting
 
-### Backend fails because `GEMINI_API_KEY` is missing
+### Requests are read by the keyword parser, or explanations are unavailable
 
-Set `GEMINI_API_KEY` before starting the backend, or configure the chat route to be optional.
+Set `ANTHROPIC_API_KEY` in `backend/.env` and restart the backend. The `parser` field returned by `/api/intent/parse` shows which parser ran.
 
 ### Google Map does not load
 

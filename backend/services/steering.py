@@ -9,7 +9,10 @@ without scores it falls back to 1 for a wanted category and 0 otherwise.
 novelty is 1 minus the share of the user's trajectory spent in the POI's
 category. Before scoring, POIs in avoided categories or beyond max_hop_km are
 removed, and the nearest POIs in the wanted categories join the pool, since the
-backbone may propose none of them.
+backbone may propose none of them. When places of the wanted categories are within
+reach (max_hop_km, else the reach of the travel mode), only they are kept, so the
+request decides the stop and the score ranks within it; with none in reach, the
+request scores nothing and habit (plus novelty, when asked for) decides.
 """
 
 from __future__ import annotations
@@ -110,16 +113,25 @@ def steer(
     lam, eps = controls.habit_intent, controls.explore
 
     pool = [dict(row) for row in rows]
+    radius_km = max_hop_km or config.reach_km(intent.travel_mode if intent else "drive")
+    visited = set(session_ids) if config.exclude_seen else set()
+    # How many places of the wanted types the data has within reach; 0 lets the UI say
+    # the request could not be met here, rather than that it lost to habit.
+    in_range = None
+    if want and origin is not None:
+        in_range = len(
+            index.nearest_in_categories(
+                want, origin, k=len(index.points), radius_km=radius_km, exclude=visited
+            )
+        )
     added = 0
     if want and lam > 0 and origin is not None and config.intent_k > 0:
-        exclude = {int(row["raw_poi_id"]) for row in pool}
-        if config.exclude_seen:
-            exclude.update(session_ids)
+        exclude = {int(row["raw_poi_id"]) for row in pool} | visited
         nearest = index.nearest_in_categories(
             want,
             origin,
             k=config.intent_k,
-            radius_km=max_hop_km or config.intent_radius_km,
+            radius_km=radius_km,
             exclude=exclude,
         )
         for distance, point in nearest:
@@ -156,12 +168,27 @@ def steer(
         row["category_name"] = category
         kept.append(row)
 
+    # The request decides the stop whenever the data has a fitting place within reach.
+    off_request = 0
+    if want and lam > 0 and config.intent_filter and in_range:
+        wanted = [
+            row
+            for row in kept
+            if row["category_name"] in want and row.get("hop_km", 0.0) <= radius_km
+        ]
+        if wanted:
+            off_request = len(kept) - len(wanted)
+            kept = wanted
+
     # Normalize SBR scores over the pool the pipeline produced, before any removal,
     # and store them so the evidence builder decomposes the same numbers.
     fallback_habit = normalized_sbr_by_raw_id(rows)
     visits = Counter(
         index.points[raw_id].category for raw_id in session_ids if raw_id in index.points
     )
+    # With nothing of the wanted types within reach, the request cannot be met here, so
+    # partial similarity to it does not rank stops either: habit decides, as the UI says.
+    request_unmet = config.intent_filter and in_range == 0
     for row in kept:
         if row.get("normalized_sbr_score") is None:
             row["normalized_sbr_score"] = fallback_habit.get(int(row["raw_poi_id"]), 0.0)
@@ -172,6 +199,8 @@ def steer(
                 value, raw = (1.0 if row["category_name"] in want else 0.0), None
             else:
                 value, raw = intent_scores.get(row["category_name"], (0.0, None))
+            if request_unmet:
+                value = 0.0
             row["intent_value"] = value
             row["intent_similarity"] = raw
             score += lam * value
@@ -181,6 +210,8 @@ def steer(
             score += eps * row["novelty_value"]
         if intent is not None:
             row["intent_matched"] = [row["category_name"]] if row["category_name"] in want else []
+            row["intent_in_range"] = in_range
+            row["intent_radius_km"] = radius_km if in_range is not None else None
         row["steer_base_score"] = base
         row["steer_score"] = score
 
@@ -198,12 +229,18 @@ def steer(
     parts = [f"lambda={lam:g}", f"epsilon={eps:g}"]
     if want and lam > 0:
         parts.append(f"intent signal: {signal_method}")
+    if in_range is not None:
+        parts.append(f"{in_range} places of the wanted types within {radius_km:g} km")
     if added:
         parts.append(f"{added} intent candidates added")
     if avoided:
         parts.append(f"{avoided} in avoided categories removed")
     if too_far:
         parts.append(f"{too_far} beyond {max_hop_km:g} km removed")
+    if off_request:
+        parts.append(f"{off_request} not of the wanted types removed")
+    if request_unmet and want and lam > 0:
+        parts.append("request not met within reach; ranked by habit")
     if origin is None:
         parts.append("no origin coordinates; distance rules not applied")
     return kept, "; ".join(parts)
