@@ -159,6 +159,15 @@ WHERENEXT_SEMANTIC_MODE=single
 
 Do not commit real `.env` files or API keys.
 
+### Google Maps Setup
+
+The map and the road routes use two Google APIs, enabled in one Google Cloud project with billing turned on:
+
+- **Maps JavaScript API** draws the map. Its key is `VITE_GOOGLE_API_KEY` in `frontend/.env`; restrict it to your site's HTTP referrers. The stop pins need a vector map ID from the same project; set it as `VITE_GOOGLE_MAP_ID` if the map stays grey or the pins do not appear.
+- **Routes API** turns each leg of a route into a road path. Its key is `GOOGLE_MAPS_API_KEY` in `backend/.env`, read by `POST /api/route/` on the server; do not restrict it to referrers.
+
+Legs follow the request's travel mode (drive, walk or transit; transit falls back to walking where there is no service). The backend caches each leg it has fetched, so redrawing the map does not call Google again. Without a key, or when Google finds no route, the map joins the stops with dashed straight lines, and the browser console says why.
+
 ---
 
 ## Required Artifacts
@@ -402,9 +411,9 @@ Set `ANTHROPIC_API_KEY` in `backend/.env` and restart the backend. The `parser` 
 
 Check that `VITE_GOOGLE_API_KEY` is correctly set in `frontend/.env`.
 
-### Route visualization does not appear
+### Routes are dashed straight lines instead of roads
 
-Check that the backend route proxy can access the Google Routes API and that the Google API key has the required permissions.
+The map could not get road paths. The browser console logs the backend's reason: usually `GOOGLE_MAPS_API_KEY` is missing from `backend/.env` (restart the backend after adding it), or the Routes API is not enabled for the key's project, in which case the backend log shows Google's error.
 
 ### Recommendation endpoint fails because checkpoint is missing
 

@@ -20,6 +20,8 @@
     color?: string
     innerColor?: string
     highlighted?: boolean
+    // Routes API travel mode: DRIVE, WALK or TRANSIT.
+    mode?: string
   }>()
 
   const showPath = ref<PathInfo | null>(null)
@@ -29,9 +31,9 @@
   const isHovering = ref(false)
   const emphasized = computed(() => isHovering.value || Boolean(props.highlighted))
 
-  // Without a road route (no routing key, or the routing service is down), the points are
-  // joined by straight lines, drawn thinner; a duration of "0s" keeps the travel-time
-  // popup closed for them.
+  // Without a road route (no routing key, or Google found none), the points are joined by
+  // straight dashed lines, so they do not pass for roads; a duration of "0s" keeps the
+  // travel-time popup closed for them.
   const straightPath = (points: GowallaPlace[]): PathInfo | null => {
     const path = points
       .filter((p) => p && p.latitude != null && p.longitude != null)
@@ -56,7 +58,10 @@
       const time = new Date().toISOString()
       const res = (await api.post("/route/", { points: points, time: time, type: type })).data
       const route = res["route"]
-      if (!route) return null
+      if (!route) {
+        console.info("No road route:", res["message"])
+        return null
+      }
 
       const encodedPolyline = route.polyline.encodedPolyline
       const decodedTuple = decode(encodedPolyline)
@@ -84,14 +89,10 @@
   })
 
   watch(
-    () => propsPointStr.value,
+    () => [propsPointStr.value, props.mode],
     async () => {
       showPath.value =
-        (await fetchRoutePath(
-          props.points,
-          // props.type === "hist" ? "WALK" : "TRANSIT"
-          "DRIVE",
-        )) ?? straightPath(props.points)
+        (await fetchRoutePath(props.points, props.mode ?? "DRIVE")) ?? straightPath(props.points)
     },
     { immediate: true },
   )
@@ -111,14 +112,34 @@
 </script>
 
 <template>
-  <template v-if="showPath && showPath.path.length > 0">
-    <!-- Base Line (Solid) -->
+  <!-- Straight fallback: one dashed line. -->
+  <Polyline
+    v-if="showPath && showPath.type === 'STRAIGHT'"
+    :options="{
+      path: showPath.path,
+      strokeOpacity: 0,
+      zIndex: emphasized ? 3 : 1,
+      icons: [
+        {
+          icon: {
+            path: 'M 0,-1 0,1',
+            strokeColor: props.type === 'hist' ? palette.neutral : palette.accent,
+            strokeOpacity: 1,
+            scale: emphasized ? 4 : 3,
+          },
+          offset: '0',
+          repeat: '14px',
+        },
+      ],
+    }" />
+  <template v-else-if="showPath && showPath.path.length > 0">
+    <!-- Road route: an outline under the colored line. -->
     <Polyline
       :options="{
         path: showPath.path,
         strokeColor: props.type === 'hist' ? palette.neutralStrong : palette.accentStrong,
         strokeOpacity: emphasized ? 0.8 : 1,
-        strokeWeight: (emphasized ? 10 : 7) - (showPath.type === 'STRAIGHT' ? 3 : 0),
+        strokeWeight: emphasized ? 10 : 7,
         zIndex: emphasized ? 3 : 1,
         cursor: 'pointer',
       }"
@@ -130,7 +151,7 @@
         path: showPath.path,
         strokeColor: props.type === 'hist' ? palette.neutralSoft : palette.accent,
         strokeOpacity: 1,
-        strokeWeight: (emphasized ? 7 : 5) - (showPath.type === 'STRAIGHT' ? 2 : 0),
+        strokeWeight: emphasized ? 7 : 5,
         zIndex: emphasized ? 4 : 2,
         cursor: 'pointer',
       }"

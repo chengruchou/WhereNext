@@ -18,6 +18,10 @@
   type LayerKey = "hist" | "search" | "rec"
 
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
+  // Pins need a vector map ID from the same Google Cloud project as the key.
+  const mapId = import.meta.env.VITE_GOOGLE_MAP_ID || "506622965fe133bac9a880a1"
+  const ROUTE_MODES: Record<string, string> = { walk: "WALK", drive: "DRIVE", transit: "TRANSIT" }
+
   const props = defineProps<{
     showSearch: GowallaPlace[]
     showRecommend: GowallaPlace[][]
@@ -26,6 +30,7 @@
     layers: Record<LayerKey, boolean>
     openStep: number | null
     hoveredStep: number | null
+    travelMode: string
   }>()
   const emit = defineEmits<{
     (e: "submit-add-history", payload: { passPlace: GowallaPlace | null }): void
@@ -161,7 +166,7 @@
     <GoogleMap
       ref="mapRef"
       :api-key="apiKey"
-      map-id="506622965fe133bac9a880a1"
+      :map-id="mapId"
       style="width: 100%; height: 100%"
       :center="center"
       :zoom="15"
@@ -200,6 +205,7 @@
           :key="'leg-' + index + '-' + leg[1].raw_poi_id"
           :points="leg"
           :type="'rec'"
+          :mode="ROUTE_MODES[props.travelMode] ?? 'DRIVE'"
           :highlighted="isActive(index)" />
 
         <AdvancedMarker

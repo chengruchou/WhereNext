@@ -324,6 +324,7 @@
           :layers="layers"
           :open-step="openStep"
           :hovered-step="hoveredStep"
+          :travel-mode="routeEvidence?.intent?.travel_mode ?? 'drive'"
           @toggle-layer="layers[$event] = !layers[$event]"
           @select-step="openStep = $event"
           @submit-add-history="addUserHistory" />
