@@ -66,6 +66,14 @@ class RecommendationConfig:
     semantic_top_k: int
     semantic_weight: float
     semantic_mode: str
+    intent_model: str
+    intent_lambda_soft: float
+    intent_lambda_firm: float
+    explore_balanced: float
+    explore_new: float
+    intent_k: int
+    intent_radius_km: float
+    intent_encoder: str
 
     @classmethod
     def from_env(cls) -> "RecommendationConfig":
@@ -113,4 +121,19 @@ class RecommendationConfig:
             semantic_top_k=max(0, _env_int("WHERENEXT_SEMANTIC_TOP_K", 20)),
             semantic_weight=_env_float("WHERENEXT_SEMANTIC_WEIGHT", 0.1),
             semantic_mode=os.getenv("WHERENEXT_SEMANTIC_MODE", "single").strip().lower(),
+            # Weights derived from a parsed intent: starting values, to be tuned with
+            # the habit-intent sweep.
+            intent_model=os.getenv("WHERENEXT_INTENT_MODEL", "gemini-2.5-flash"),
+            intent_lambda_soft=_env_float("WHERENEXT_INTENT_LAMBDA_SOFT", 0.5),
+            intent_lambda_firm=_env_float("WHERENEXT_INTENT_LAMBDA_FIRM", 0.8),
+            explore_balanced=_env_float("WHERENEXT_EXPLORE_BALANCED", 0.1),
+            explore_new=_env_float("WHERENEXT_EXPLORE_NEW", 0.3),
+            # POIs in the wanted categories added to the candidate pool, searched within
+            # max_hop_km when the intent sets it, else within this radius.
+            intent_k=max(0, _env_int("WHERENEXT_INTENT_K", 20)),
+            intent_radius_km=_env_float("WHERENEXT_INTENT_RADIUS_KM", 5.0),
+            # Sentence-transformers model for the graded intent signal; "lexical" skips it.
+            intent_encoder=os.getenv(
+                "WHERENEXT_INTENT_ENCODER", "sentence-transformers/all-MiniLM-L6-v2"
+            ),
         )

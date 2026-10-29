@@ -1,6 +1,7 @@
 from database import db
 from flask import Flask
 from flask_cors import CORS
+from routes.intent_api import intent_bp
 from routes.model_api import model_bp
 from routes.poi_api import poi_bp
 from routes.route_api import route_bp
@@ -23,6 +24,7 @@ app.register_blueprint(model_bp)
 app.register_blueprint(poi_bp)
 app.register_blueprint(route_bp)
 app.register_blueprint(chat_bp)
+app.register_blueprint(intent_bp)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

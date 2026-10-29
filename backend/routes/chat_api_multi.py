@@ -19,9 +19,9 @@ def explain():
     ]  # 大小為 : 推論次數 * 每次推論點數(5)，資料格式參照下方 30~52 行的 dict structure
 
     if hists == []:
-        return_str = "No user history."
-    elif multi_recs == []:
-        return_str = "Get next POIs first."
+        return jsonify("No user history.")
+    if multi_recs == []:
+        return jsonify("Get next POIs first.")
 
     ### modify the code below ###
     hist_ids = [e["raw_poi_id"] for e in hists]
