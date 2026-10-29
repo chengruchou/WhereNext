@@ -1,6 +1,9 @@
 <script lang="ts" setup>
-  import { computed, ref } from "vue"
-  
+  import { computed, ref, watch } from "vue"
+
+  // The traveler loaded in the app, which a demo traveler can set from outside.
+  const props = defineProps<{ currentId: number | null }>()
+
   const userId = ref<number | null>(null)
   const isLoggedIn = ref(false)
   const formRef = ref<any>(null)
@@ -8,6 +11,15 @@
   const emit = defineEmits<{
     (e: "submit-user-id", payload: { passUserId: number | null }): void
   }>()
+
+  watch(
+    () => props.currentId,
+    (id) => {
+      userId.value = id
+      isLoggedIn.value = id != null
+    },
+    { immediate: true },
+  )
 
   const idRules = [
     (value: number | string | null) =>

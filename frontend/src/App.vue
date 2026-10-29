@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-  import { ref, onMounted, nextTick } from "vue"
+  import { computed, ref, onMounted, nextTick } from "vue"
   import { api, errorMessage } from "./api"
+  import { DEMO_TRAVELERS, EXAMPLE_REQUESTS, visitTime, type DemoTraveler } from "./demo"
+  import { inspector } from "./inspector"
   import TravelerPanel from "./components/TravelerPanel.vue"
   import MapCanvas from "./components/MapCanvas.vue"
   import SearchPanel from "./components/SearchPanel.vue"
@@ -193,6 +195,36 @@
     intentError.value = ""
   }
 
+  // Demo travelers: picking one rewrites its reserved user's visits, then loads it.
+  const activeDemo = ref<DemoTraveler | null>(null)
+  const loadingDemo = ref<string | null>(null)
+  const examples = computed(() => activeDemo.value?.requests ?? EXAMPLE_REQUESTS)
+
+  const selectTraveler = (payload: { passUserId: number | null }) => {
+    activeDemo.value = DEMO_TRAVELERS.find((t) => t.userId === payload.passUserId) ?? null
+    fetchUserHistory(payload)
+  }
+
+  const loadDemo = async (traveler: DemoTraveler) => {
+    loadingDemo.value = traveler.key
+    try {
+      await api.delete(`/user/${traveler.userId}`)
+      for (const [index, poiId] of traveler.visits.entries()) {
+        await api.post(`/user/${traveler.userId}`, {
+          poi_id: poiId,
+          visit_time: visitTime(traveler, index),
+        })
+      }
+      clearIntent()
+      activeDemo.value = traveler
+      await fetchUserHistory({ passUserId: traveler.userId })
+    } catch (error) {
+      report("Couldn't load the demo traveler", error)
+    } finally {
+      loadingDemo.value = null
+    }
+  }
+
   const editIntent = (payload: { intent: Intent }) => {
     intent.value = payload.intent
     if (canPlan() && showRecommend.value.length > 0) getNextPOI()
@@ -267,6 +299,23 @@
         <span class="text-primary">where</span><span class="text-on-surface">next</span>
       </v-app-bar-title>
 
+      <v-spacer />
+
+      <v-tooltip location="bottom" text="Show score numbers, weights and pipeline timings">
+        <template v-slot:activator="{ props: tip }">
+          <v-btn
+            v-bind="tip"
+            size="small"
+            :variant="inspector ? 'tonal' : 'text'"
+            :color="inspector ? 'primary' : undefined"
+            prepend-icon="mdi-tune-variant"
+            :aria-pressed="inspector"
+            class="research-app__inspector"
+            @click="inspector = !inspector">
+            Inspector
+          </v-btn>
+        </template>
+      </v-tooltip>
     </v-app-bar>
 
     <v-snackbar v-model="notice.show" location="bottom" :timeout="8000" color="error" multi-line>
@@ -282,7 +331,11 @@
         <TravelerPanel
           :user-id="userId"
           :user-history="userHistory"
-          @submit-user-id="fetchUserHistory"
+          :demo-travelers="DEMO_TRAVELERS"
+          :active-demo="activeDemo"
+          :loading-demo="loadingDemo"
+          @submit-user-id="selectTraveler"
+          @load-demo="loadDemo"
           @delete-all="delUserHistory"
           @delete-one="delOneHistory"
           @focus-place="handleFocusPlace" />
@@ -292,6 +345,7 @@
           :controls="intentControls"
           :is-parsing="isParsingIntent"
           :parse-error="intentError"
+          :examples="examples"
           @submit-request="parseIntent"
           @clear-request="clearIntent"
           @edit-intent="editIntent" />
@@ -359,6 +413,12 @@
     font-weight: 700;
     letter-spacing: -0.03em;
     text-transform: lowercase;
+  }
+
+  .research-app__inspector {
+    letter-spacing: 0;
+    margin-right: 8px;
+    text-transform: none;
   }
 
   .research-drawer {

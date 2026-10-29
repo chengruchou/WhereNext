@@ -1,5 +1,6 @@
 <script lang="ts" setup>
   import { computed } from "vue"
+  import { inspector } from "@/inspector"
   import type { EvidenceRecord, SignalName, StageStatus } from "@/types/evidence"
 
   const props = defineProps<{
@@ -69,16 +70,21 @@
 
 <template>
   <section class="stop-evidence" :aria-label="`Score parts for stop ${record.step}`">
+    <!-- Visitors compare the bars; the Inspector adds the numbers behind them. -->
     <div class="stop-evidence__rows">
-      <div v-for="row in rows" :key="row.name" class="stop-evidence__row">
+      <div
+        v-for="row in rows"
+        :key="row.name"
+        class="stop-evidence__row"
+        :class="{ 'stop-evidence__row--numbers': inspector }">
         <span class="stop-evidence__label">{{ row.label }}</span>
         <div class="stop-evidence__track">
           <div class="stop-evidence__bar" :style="{ width: `${row.width}%`, background: row.color }" />
         </div>
-        <span class="stop-evidence__value">{{ formatSigned(row.contribution) }}</span>
+        <span v-if="inspector" class="stop-evidence__value">{{ formatSigned(row.contribution) }}</span>
       </div>
     </div>
-    <div class="stop-evidence__total">
+    <div v-if="inspector" class="stop-evidence__total">
       Score {{ record.final_score.toFixed(2) }}, the sum of these parts
     </div>
 
@@ -86,7 +92,7 @@
       <li v-for="line in facts" :key="line">{{ line }}</li>
     </ul>
 
-    <div class="stop-evidence__stages">
+    <div v-if="inspector" class="stop-evidence__stages">
       <v-tooltip v-for="s in stepStages" :key="s.stage" location="top">
         <template #activator="{ props: tip }">
           <v-chip v-bind="tip" size="x-small" variant="text" :prepend-icon="stageIcon(s.status)">
@@ -114,6 +120,10 @@
     align-items: center;
     display: grid;
     gap: 8px;
+    grid-template-columns: 9.5em minmax(0, 1fr);
+  }
+
+  .stop-evidence__row--numbers {
     grid-template-columns: 9.5em minmax(0, 1fr) 3.2em;
   }
 

@@ -1,6 +1,7 @@
 <script lang="ts" setup>
   import { computed, ref } from "vue"
   import type { CategoryMatch, Intent, SteeringControls } from "@/types/intent"
+  import { inspector } from "@/inspector"
   import { cleanPhrase } from "@/utils/route"
   import StepHeading from "./StepHeading.vue"
 
@@ -9,6 +10,7 @@
     controls: SteeringControls | null
     isParsing: boolean
     parseError: string
+    examples: string[]
   }>()
 
   const emit = defineEmits<{
@@ -24,6 +26,11 @@
   const parseRequest = () => {
     const text = query.value.trim()
     if (text && !props.isParsing) emit("submit-request", { query: text })
+  }
+
+  const useExample = (text: string) => {
+    query.value = text
+    parseRequest()
   }
 
   const clearRequest = () => {
@@ -96,7 +103,7 @@
     return items
   })
 
-  // What the weights mean, in one sentence; the numbers are under "How this was read".
+  // What the weights mean, in one sentence; the numbers are in the Inspector view.
   const weightSentence = computed(() => {
     const intent = props.intent
     if (!intent) return ""
@@ -146,6 +153,19 @@
           @click="parseRequest" />
       </template>
     </v-text-field>
+
+    <div v-if="!intent && examples.length > 0" class="intent-panel__examples">
+      <span class="intent-panel__examples-label">Try</span>
+      <v-chip
+        v-for="text in examples"
+        :key="text"
+        size="small"
+        variant="outlined"
+        :disabled="isParsing"
+        @click="useExample(text)">
+        {{ text }}
+      </v-chip>
+    </div>
 
     <template v-if="intent">
       <div class="intent-panel__chips">
@@ -208,6 +228,7 @@
       </p>
 
       <button
+        v-if="inspector"
         type="button"
         class="intent-panel__reading-toggle"
         :aria-expanded="showReading"
@@ -215,7 +236,7 @@
         How this was read
         <v-icon :icon="showReading ? 'mdi-chevron-up' : 'mdi-chevron-down'" size="14" />
       </button>
-      <dl v-if="showReading" class="intent-panel__reading">
+      <dl v-if="inspector && showReading" class="intent-panel__reading">
         <dt>Weight on your request</dt>
         <dd>{{ percent(controls?.habit_intent) }}</dd>
         <dt>Weight on places new to you</dt>
@@ -281,6 +302,19 @@
     font-size: 0.76rem;
     line-height: 1.4;
     margin: 4px 0 0;
+  }
+
+  .intent-panel__examples {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .intent-panel__examples-label {
+    color: rgba(var(--v-theme-on-surface), 0.64);
+    font-size: 0.78rem;
   }
 
   .intent-panel__reading-toggle {

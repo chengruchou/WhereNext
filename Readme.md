@@ -159,6 +159,10 @@ WHERENEXT_SEMANTIC_MODE=single
 
 Do not commit real `.env` files or API keys.
 
+### Demo Travelers and Inspector
+
+The traveler step offers demo travelers (`frontend/src/demo.ts`), each with requests that show its case well. Picking one replaces the visits of its reserved user ID (900001 and 900002), so keep those IDs free for the demo. The **Inspector** button in the top bar shows score numbers, weights and pipeline timings; visitors see the bars and sentences without them. Add `?inspector=1` to the URL to open the app with the Inspector on.
+
 ### Google Maps Setup
 
 The map and the road routes use two Google APIs, enabled in one Google Cloud project with billing turned on:
