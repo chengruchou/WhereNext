@@ -43,6 +43,11 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_choice(name: str, choices: tuple[str, ...], default: str) -> str:
+    value = os.getenv(name, default).strip().lower()
+    return value if value in choices else default
+
+
 @dataclass(frozen=True)
 class RecommendationConfig:
     model_repo: Path
@@ -76,6 +81,8 @@ class RecommendationConfig:
     reach_transit_km: float
     reach_drive_km: float
     intent_filter: bool
+    intent_habit_scoring: bool
+    intent_habit_normalization: str
     intent_encoder: str
     route_repeat_penalty: float
     route_travel_weight: float
@@ -143,13 +150,22 @@ class RecommendationConfig:
             explore_new=_env_float("WHERENEXT_EXPLORE_NEW", 0.3),
             # POIs in the wanted categories added to the candidate pool, searched within
             # max_hop_km when the intent sets it, else within the reach of its travel mode.
-            intent_k=max(0, _env_int("WHERENEXT_INTENT_K", 20)),
+            intent_k=max(0, _env_int("WHERENEXT_INTENT_K", 100)),
             reach_walk_km=_env_float("WHERENEXT_REACH_WALK_KM", 2.0),
             reach_transit_km=_env_float("WHERENEXT_REACH_TRANSIT_KM", 15.0),
             reach_drive_km=_env_float("WHERENEXT_REACH_DRIVE_KM", 40.0),
             # Keep only the wanted types when any are within reach; off for the
             # habit-intent sweep, where lambda alone moves the ranking.
             intent_filter=_env_bool("WHERENEXT_INTENT_FILTER", True),
+            # Score every kept place of the requested types with the sequence model, so habit
+            # ranks within the request; off reproduces habit only for its own top candidates.
+            intent_habit_scoring=_env_bool("WHERENEXT_INTENT_HABIT_SCORING", True),
+            # How the model's scores become habit values within the request: "minmax" spans
+            # 0 to 1, "relative" is exp(score - top score), "softmax" is the model's
+            # probability over the places; the last two stay flat when the model is unsure.
+            intent_habit_normalization=_env_choice(
+                "WHERENEXT_INTENT_HABIT_NORMALIZATION", ("minmax", "relative", "softmax"), "minmax"
+            ),
             # Sentence-transformers model for the graded intent signal; "lexical" skips it.
             intent_encoder=os.getenv(
                 "WHERENEXT_INTENT_ENCODER", "sentence-transformers/all-MiniLM-L6-v2"

@@ -13,17 +13,26 @@ backbone may propose none of them. When places of the wanted categories are with
 reach (max_hop_km, else the reach of the travel mode), only they are kept, so the
 request decides the stop and the score ranks within it; with none in reach, the
 request scores nothing and habit (plus novelty, when asked for) decides.
+
+Within the request, every kept place gets the same two base signals: habit, the
+sequence model's score for it after this session, normalized over the kept places,
+and closeness to the previous stop. Places that joined only through the request have
+no score from the backbone's top-K list, so without this they would be ordered by
+distance alone.
 """
 
 from __future__ import annotations
 
 import json
+import math
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from contracts.intent import Intent, SteeringControls
+
 from services.evidence_builder import base_signals, haversine_km, normalized_sbr_by_raw_id
 from services.intent_signal import IntentScores
 from services.model_config import RecommendationConfig
@@ -99,11 +108,13 @@ def steer(
     spatial_ran: bool,
     intent_scores: IntentScores | None = None,
     signal_method: str = "category match",
+    habit_scores: Callable[[list[int]], dict[int, float]] | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     """Return the re-ranked pool and a one-line summary for the stage status.
 
     intent_scores maps category name to (value, raw similarity); None means a
-    binary category match.
+    binary category match. habit_scores returns the sequence model's score for each
+    given raw POI ID; None, or an empty answer, leaves habit as the pipeline set it.
     """
 
     origin = index.points.get(session_ids[-1]) if session_ids else None
@@ -170,6 +181,7 @@ def steer(
 
     # The request decides the stop whenever the data has a fitting place within reach.
     off_request = 0
+    filtered = False
     if want and lam > 0 and config.intent_filter and in_range:
         wanted = [
             row
@@ -179,6 +191,10 @@ def steer(
         if wanted:
             off_request = len(kept) - len(wanted)
             kept = wanted
+            filtered = True
+    habit_scored = 0
+    if filtered and habit_scores is not None and config.intent_habit_scoring:
+        habit_scored = _score_within_request(kept, habit_scores, spatial_ran, config)
 
     # Normalize SBR scores over the pool the pipeline produced, before any removal,
     # and store them so the evidence builder decomposes the same numbers.
@@ -239,8 +255,62 @@ def steer(
         parts.append(f"{too_far} beyond {max_hop_km:g} km removed")
     if off_request:
         parts.append(f"{off_request} not of the wanted types removed")
+    if habit_scored:
+        parts.append(f"habit scored for {habit_scored} places of the wanted types")
     if request_unmet and want and lam > 0:
         parts.append("request not met within reach; ranked by habit")
     if origin is None:
         parts.append("no origin coordinates; distance rules not applied")
     return kept, "; ".join(parts)
+
+
+def _score_within_request(
+    rows: list[dict[str, Any]],
+    habit_scores: Callable[[list[int]], dict[int, float]],
+    spatial_ran: bool,
+    config: RecommendationConfig,
+) -> int:
+    """Give every kept place of the request the same base signals: the sequence model's
+    score, normalized over these places, and closeness to the previous stop.
+    Returns how many places the model scored; 0 leaves the rows unchanged."""
+
+    scores = habit_scores([int(row["raw_poi_id"]) for row in rows])
+    known = [scores[int(row["raw_poi_id"])] for row in rows if int(row["raw_poi_id"]) in scores]
+    if not known:
+        return 0
+    habit = _normalize_habit(known, config.intent_habit_normalization)
+    for row in rows:
+        raw = scores.get(int(row["raw_poi_id"]))
+        row["sbr_score"] = raw
+        row["normalized_sbr_score"] = 0.0 if raw is None else habit(raw)
+        # Similarity to past visits was computed only for the backbone's own candidates,
+        # so it is left out here; closeness is recomputed the same way for every place.
+        row["semantic_fusion_score"] = None
+        if row.get("hop_km") is not None:
+            row["distance_km"] = row["hop_km"]
+            row["spatial_score"] = 1.0 / (1.0 + row["hop_km"])
+        if spatial_ran:
+            row["spatial_fusion_score"] = float(config.alpha_spatial) * float(
+                row.get("spatial_score") or 0.0
+            )
+    return len(known)
+
+
+def _normalize_habit(scores: list[float], mode: str) -> Callable[[float], float]:
+    """Map a raw model score to a habit value in [0, 1], given all candidates' scores.
+
+    minmax spans 0 to 1 whatever the model's confidence; relative is exp(s - top score), so
+    the top place is 1 and the rest fall as the model grows sure; softmax is the model's
+    probability renormalized over the candidates.
+    """
+
+    top = max(scores)
+    if mode == "relative":
+        return lambda s: math.exp(s - top)
+    if mode == "softmax":
+        total = sum(math.exp(s - top) for s in scores)
+        return lambda s: math.exp(s - top) / total
+    low = min(scores)
+    if top - low < 1e-12:
+        return lambda s: 1.0
+    return lambda s: (s - low) / (top - low)

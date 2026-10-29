@@ -336,14 +336,19 @@ POST /api/model/route/<user_id>
 
 `/api/intent/parse` turns a request such as "museums, nothing with coffee" into an `Intent` whose place types exist in the POI data. `/api/model/route/<user_id>` plans every stop in one call and returns the candidates per stop with per-stop evidence: score parts, distance from the previous stop, and whether each pipeline stage ran.
 
-When places of the requested types are within reach of the previous stop, only those are kept, so the request decides each stop and the user's habits rank within it. Reach is the request's own distance limit, else it depends on the travel mode. When nothing of the requested types is within reach, the stops follow the user's habits and the evidence says so.
+When places of the requested types are within reach of the previous stop, only those are kept, so the request decides each stop and the user's habits rank within it. Reach is the request's own distance limit, else it depends on the travel mode. When nothing of the requested types is within reach, the stops follow the user's habits and the evidence says so. Within the request, the sequence model scores every kept place, so each one carries the same habit and closeness signals.
 
 ```text
 WHERENEXT_REACH_WALK_KM=2
 WHERENEXT_REACH_TRANSIT_KM=15
 WHERENEXT_REACH_DRIVE_KM=40
-WHERENEXT_INTENT_FILTER=true    # false ranks by the weighted score alone
+WHERENEXT_INTENT_FILTER=true                 # false ranks by the weighted score alone
+WHERENEXT_INTENT_K=100                       # places of the requested types added per step
+WHERENEXT_INTENT_HABIT_SCORING=true          # false: habit only for the model's own top candidates
+WHERENEXT_INTENT_HABIT_NORMALIZATION=minmax  # or relative / softmax; see experiments/E-B2
 ```
+
+How well this ranking finds the place a user actually visited next, against nearest-first and most-visited baselines, is measured in `experiments/` (E-B and E-B2), with each experiment's predictions written before its run.
 
 ### Route Planning API
 
