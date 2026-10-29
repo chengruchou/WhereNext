@@ -1,24 +1,24 @@
 """Turn a natural-language request into an Intent and derive the ranking weights.
 
-Gemini parses the request into a ParsedIntent whose category hints must come
-from the dataset's vocabulary. When Gemini is unavailable or returns invalid
-output, a keyword parser takes over, so the demo keeps working offline. Either
-way, the resolver keeps only categories that exist in the POI data.
+Claude parses the request into a ParsedIntent (structured output) whose
+category hints must come from the dataset's vocabulary. When Claude is
+unavailable, refuses, or returns invalid output, a keyword parser takes over,
+so the demo keeps working offline. Either way, the resolver keeps only
+categories that exist in the POI data.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import threading
 import time
 from pathlib import Path
 from typing import Any, Literal
 
-from google import genai
-from google.genai import types
+import anthropic
+from pydantic import ValidationError
 
 from contracts.intent import (
     CategoryMatch,
@@ -127,13 +127,15 @@ class IntentParser:
     def parse(self, query: str) -> Intent:
         vocabulary = self.vocabulary()
         start = time.perf_counter()
-        parsed = self._parse_with_llm(query, vocabulary)
+        result = self._parse_with_llm(query, vocabulary)
         source: Literal["llm", "keyword"] = "llm"
-        if parsed is None:
-            parsed = parse_with_keywords(query, vocabulary)
+        if result is None:
+            parsed, model = parse_with_keywords(query, vocabulary), "keyword"
             source = "keyword"
+        else:
+            parsed, model = result
         trace = ParserTrace(
-            model=self.config.intent_model if source == "llm" else "keyword",
+            model=model,
             latency_ms=(time.perf_counter() - start) * 1000.0,
             fallback=source != "llm",
         )
@@ -141,36 +143,68 @@ class IntentParser:
             parsed, query=query, vocabulary=vocabulary, source=source, parser=trace
         )
 
-    def _parse_with_llm(self, query: str, vocabulary: CategoryVocabulary) -> ParsedIntent | None:
+    def _parse_with_llm(
+        self, query: str, vocabulary: CategoryVocabulary
+    ) -> tuple[ParsedIntent, str] | None:
+        """Return the parsed intent and the model that served it, or None to fall back."""
+
         client = self._get_client()
         if client is None:
-            logger.info("GEMINI_API_KEY is not set; using the keyword intent parser.")
             return None
         try:
-            response = client.models.generate_content(
+            response = client.beta.messages.parse(
                 model=self.config.intent_model,
-                contents=f"Request: {query}",
-                config=types.GenerateContentConfig(
-                    system_instruction=_SYSTEM_PROMPT + "\n".join(vocabulary.names),
-                    response_mime_type="application/json",
-                    response_json_schema=ParsedIntent.model_json_schema(),
-                    temperature=0.0,
-                    # Flash models only: skip thinking to keep parsing interactive.
-                    thinking_config=types.ThinkingConfig(thinking_budget=0),
-                ),
+                max_tokens=8000,
+                system=[
+                    {
+                        "type": "text",
+                        "text": _SYSTEM_PROMPT + "\n".join(vocabulary.names),
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": f"Request: {query}"}],
+                output_format=ParsedIntent,
+                # A short extraction: low effort keeps parsing interactive at the booth.
+                output_config={"effort": "low"},
+                # If a safety classifier declines, the API retries on a fallback model.
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
             )
-            return ParsedIntent.model_validate_json(response.text or "")
-        except Exception as exc:
-            logger.warning("LLM intent parsing failed; using the keyword parser: %s", exc)
+        except anthropic.RateLimitError:
+            logger.warning("Claude rate limit reached; using the keyword intent parser.")
             return None
+        except anthropic.APIStatusError as exc:
+            logger.warning(
+                "Claude returned HTTP %s; using the keyword intent parser: %s",
+                exc.status_code,
+                exc.message,
+            )
+            return None
+        except (anthropic.AnthropicError, ValidationError) as exc:
+            logger.warning("Claude intent parsing failed; using the keyword intent parser: %s", exc)
+            return None
+        if response.stop_reason == "refusal" or response.parsed_output is None:
+            logger.warning(
+                "Claude returned no intent (stop_reason=%s); using the keyword intent parser.",
+                response.stop_reason,
+            )
+            return None
+        return response.parsed_output, response.model
 
     def _get_client(self) -> Any | None:
         if self._client is None:
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
+            # Credentials come from ANTHROPIC_API_KEY or an `ant auth login` profile. Without
+            # any, the SDK only fails at request time, so check before the first call.
+            client = anthropic.Anthropic()
+            if not has_credentials(client):
+                logger.info("No Claude credentials found; using the keyword intent parser.")
                 return None
-            self._client = genai.Client(api_key=api_key)
+            self._client = client
         return self._client
+
+
+def has_credentials(client: anthropic.Anthropic) -> bool:
+    return bool(client.api_key or client.auth_token or getattr(client, "credentials", None))
 
 
 def resolve_intent(

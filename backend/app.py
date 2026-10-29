@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from database import db
+from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
 from routes.intent_api import intent_bp
@@ -8,6 +11,9 @@ from routes.route_api import route_bp
 from routes.user_api import user_bp
 # from routes.chat_api import chat_bp
 from routes.chat_api_multi import chat_bp
+
+# API keys and WHERENEXT_* settings; services read them on first use, after this runs.
+load_dotenv(Path(__file__).with_name(".env"))
 
 app = Flask(__name__)
 CORS(app)

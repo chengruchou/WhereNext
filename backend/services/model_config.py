@@ -123,7 +123,7 @@ class RecommendationConfig:
             semantic_mode=os.getenv("WHERENEXT_SEMANTIC_MODE", "single").strip().lower(),
             # Weights derived from a parsed intent: starting values, to be tuned with
             # the habit-intent sweep.
-            intent_model=os.getenv("WHERENEXT_INTENT_MODEL", "gemini-2.5-flash"),
+            intent_model=os.getenv("WHERENEXT_INTENT_MODEL", "claude-opus-5-5"),
             intent_lambda_soft=_env_float("WHERENEXT_INTENT_LAMBDA_SOFT", 0.5),
             intent_lambda_firm=_env_float("WHERENEXT_INTENT_LAMBDA_FIRM", 0.8),
             explore_balanced=_env_float("WHERENEXT_EXPLORE_BALANCED", 0.1),
