@@ -1,65 +1,62 @@
 <script lang="ts" setup>
-  import { ref, onMounted, computed, watch, onUnmounted, nextTick } from "vue"
-  import axios from "axios"
-  import UserLogin from "./components/UserLogin.vue"
-  import HistoryList from "./components/HistoryList.vue"
+  import { ref, onMounted, nextTick } from "vue"
+  import { api, errorMessage } from "./api"
+  import TravelerPanel from "./components/TravelerPanel.vue"
   import MapCanvas from "./components/MapCanvas.vue"
   import SearchPanel from "./components/SearchPanel.vue"
-  import PlaceCard from "./components/PlaceCard.vue"
-  import ChatPanel from "./components/ChatPanel.vue"
   import RecommendPanel from "./components/RecommendPanel.vue"
+  import IntentPanel from "./components/IntentPanel.vue"
+  import type {
+    GroundedResponse,
+    RouteEvidence,
+    RouteResponse,
+    VerifiedExplanation,
+  } from "./types/evidence"
+  import type { Intent, IntentParseResponse, SteeringControls } from "./types/intent"
   import type { GowallaPlace, UserHistory } from "./types/place"
 
-  const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
   const userHistory = ref<UserHistory[]>([])
   const userHistPlace = ref<GowallaPlace[]>([])
   const userId = ref<number | null>(null)
   const showSearch = ref<GowallaPlace[]>([])
   const showRecommend = ref<GowallaPlace[][]>([])
-  const nowRecRound = ref(0)
+  // The stop whose details are open, and the one under the pointer; shared by panel and map.
+  const openStep = ref<number | null>(null)
+  const hoveredStep = ref<number | null>(null)
   const noSearchRes = ref(false)
   const isInferring = ref(false)
-  const currentTime = ref(new Date().toLocaleString("zh-TW", { hour12: false }))
   const focusedPlace = ref<GowallaPlace | null>(null)
   const leftDrawer = ref(true)
-  const rightDrawer = ref(true)
-  const showStr = ref("")
   const isExplaining = ref(false)
-  const isChatPanelOpen = ref(false)
+  const explanation = ref<VerifiedExplanation | null>(null)
+  const explainModel = ref("")
+  const explainError = ref("")
   const allCat = ref<string[]>([])
-  const activeEvidenceTab = ref<"history" | "search">("history")
-  
-  // Map Layers State moved from MapCanvas
-  const layers = ref({ hist: true, search: true, rec: true })
-  const filters = [
-    { key: "hist", label: "History", color: "indigo-darken-4", icon: "mdi-history" },
-    { key: "search", label: "Search", color: "amber-darken-2", icon: "mdi-magnify" },
-    { key: "rec", label: "Model", color: "indigo-accent-4", icon: "mdi-chart-timeline-variant" },
-  ] as const
+  const intent = ref<Intent | null>(null)
+  const intentControls = ref<SteeringControls | null>(null)
+  const isParsingIntent = ref(false)
+  const intentError = ref("")
+  const routeEvidence = ref<RouteEvidence | null>(null)
 
-  const topIds = computed(() => {
-    return showRecommend.value.map((round) => {
-      if (round && round.length > 0) {
-        return round[0].raw_poi_id
-      }
-      return null
-    })
-  })
+  // Map layers, switched from the map's legend.
+  const layers = ref({ hist: true, search: true, rec: true })
+
+  // Failed calls are reported in one notice at the bottom of the screen.
+  const notice = ref({ show: false, text: "" })
+  const report = (action: string, error: unknown) => {
+    console.error(error)
+    notice.value = { show: true, text: errorMessage(action, error) }
+  }
 
   onMounted(async () => {
-    const timer = setInterval(() => {
-      currentTime.value = new Date().toLocaleString("zh-TW", { hour12: false })
-    }, 1000)
     allCat.value = await fetchAllCat()
-    onUnmounted(() => clearInterval(timer))
   })
 
   const fetchAllCat = async () => {
     try {
-      console.log("Fetching All Cat")
       return (await api.get("/poi/allcat")).data
     } catch (error) {
-      alert(error)
+      report("Couldn't load place types", error)
       return []
     }
   }
@@ -67,13 +64,17 @@
   const fetchUserHistory = async (payload: { passUserId: number | null }) => {
     try {
       showRecommend.value = []
+      openStep.value = null
+      hoveredStep.value = null
+      routeEvidence.value = null
+      explanation.value = null
+      explainError.value = ""
       if (payload.passUserId || payload.passUserId === 0) {
         console.log("search user ", payload.passUserId)
         userId.value = payload.passUserId
         const res = (await api.get(`/user/${userId.value}`)).data
         userHistory.value = res.userHist
         userHistPlace.value = res.userHistPlace
-        activeEvidenceTab.value = "history"
         console.log("search result ", userHistory.value)
       } else {
         userId.value = null
@@ -82,10 +83,9 @@
         showSearch.value = []
         noSearchRes.value = false
         focusedPlace.value = null
-        activeEvidenceTab.value = "history"
       }
     } catch (error) {
-      alert(error)
+      report("Couldn't load this traveler's visits", error)
     }
   }
 
@@ -95,7 +95,7 @@
       console.log(res)
       fetchUserHistory({ passUserId: userId.value })
     } catch (error) {
-      alert(error)
+      report("Couldn't delete the visits", error)
     }
   }
 
@@ -105,7 +105,7 @@
       console.log(res)
       fetchUserHistory({ passUserId: userId.value })
     } catch (error) {
-      alert(error)
+      report("Couldn't delete the visit", error)
     }
   }
 
@@ -123,7 +123,7 @@
       console.log("add db ", msg)
       fetchUserHistory({ passUserId: userId.value })
     } catch (error) {
-      alert(error)
+      report("Couldn't add the visit", error)
     }
   }
 
@@ -135,14 +135,12 @@
       if (res && res.category_name) {
         noSearchRes.value = false
         showSearch.value = [res]
-        activeEvidenceTab.value = "search"
       } else {
         noSearchRes.value = true
         showSearch.value = []
-        activeEvidenceTab.value = "search"
       }
     } catch (error) {
-      alert(error)
+      report("Couldn't search by place ID", error)
     }
   }
 
@@ -154,37 +152,70 @@
       if (Array.isArray(res) && res.length > 0) {
         noSearchRes.value = false
         showSearch.value = res
-        activeEvidenceTab.value = "search"
       } else {
         noSearchRes.value = true
         showSearch.value = []
-        activeEvidenceTab.value = "search"
       }
     } catch (error) {
-      alert(error)
+      report("Couldn't search by place type", error)
     }
   }
 
   const clearSearchResults = () => {
     showSearch.value = []
     noSearchRes.value = false
-    activeEvidenceTab.value = "search"
   }
 
+  const canPlan = () => userId.value != null && userHistPlace.value.length > 0
+
+  // Reading a request also plans the route, when there is a user to plan from.
+  const parseIntent = async (payload: { query: string }) => {
+    isParsingIntent.value = true
+    intentError.value = ""
+    try {
+      const res = (await api.post<IntentParseResponse>("/intent/parse", { query: payload.query }))
+        .data
+      intent.value = res.intent
+      intentControls.value = res.controls
+    } catch (error) {
+      console.error(error)
+      intentError.value = "Could not read the request. Try shorter wording."
+      return
+    } finally {
+      isParsingIntent.value = false
+    }
+    if (canPlan()) getNextPOI()
+  }
+
+  const clearIntent = () => {
+    intent.value = null
+    intentControls.value = null
+    intentError.value = ""
+  }
+
+  const editIntent = (payload: { intent: Intent }) => {
+    intent.value = payload.intent
+    if (canPlan() && showRecommend.value.length > 0) getNextPOI()
+  }
+
+  // One call plans every stop; rounds[i][0] is the stop chosen at step i.
   const getNextPOI = async () => {
     isInferring.value = true
     try {
-      for (let i = 0; i < 3; i++) {
-        const res = (await api.post(`/model/genpoi/${userId.value}`, { append_back: topIds.value }))
-          .data
-        console.log("got POI res", res)
-        showRecommend.value.push(res)
-        nowRecRound.value = showRecommend.value.length - 1
-      }
-      isChatPanelOpen.value = true
+      const res = (
+        await api.post<RouteResponse>(`/model/route/${userId.value}`, {
+          intent: intent.value ?? undefined,
+        })
+      ).data
+      console.log("got route", res)
+      openStep.value = null
+      hoveredStep.value = null
+      showRecommend.value = res.rounds
+      routeEvidence.value = res.evidence
+      intentControls.value = res.evidence.intent ? res.evidence.controls : intentControls.value
       getExplanation()
     } catch (error) {
-      alert(error)
+      report("Couldn't plan the route", error)
     } finally {
       isInferring.value = false
     }
@@ -196,17 +227,29 @@
     focusedPlace.value = payload.focusPlace
   }
 
+  // The explanation is written from the route evidence and checked sentence by sentence;
+  // the route panel shows the checked sentences under each stop.
   const getExplanation = async () => {
+    const evidence = routeEvidence.value
+    if (!evidence) return
     isExplaining.value = true
+    explanation.value = null
+    explainError.value = ""
     try {
-      const res = (
-        await api.post("/chat/explain", { hists: userHistPlace.value, recs: showRecommend.value })
-      ).data
-      showStr.value = res
+      const res = (await api.post<GroundedResponse | string>("/chat/grounded", { evidence })).data
+      if (routeEvidence.value !== evidence) return // a newer route is being explained
+      if (typeof res === "string") {
+        explainError.value = res
+      } else {
+        explanation.value = res.explanation
+        explainModel.value = res.model
+      }
     } catch (error) {
-      alert(error)
+      if (routeEvidence.value !== evidence) return
+      // Shown in the route panel's footer rather than as a notice: the route itself is fine.
+      explainError.value = errorMessage("Couldn't write the explanation", error)
     } finally {
-      isExplaining.value = false
+      if (routeEvidence.value === evidence) isExplaining.value = false
     }
   }
 </script>
@@ -215,156 +258,88 @@
   <v-app class="research-app">
     <v-app-bar class="research-app__bar" color="surface" density="compact" elevation="1">
       <template v-slot:prepend>
-        <v-app-bar-nav-icon color="primary" @click="leftDrawer = !leftDrawer"></v-app-bar-nav-icon>
+        <v-app-bar-nav-icon
+          :aria-label="leftDrawer ? 'Hide planning panel' : 'Show planning panel'"
+          @click="leftDrawer = !leftDrawer"></v-app-bar-nav-icon>
       </template>
 
       <v-app-bar-title class="research-app__title">
         <span class="text-primary">where</span><span class="text-on-surface">next</span>
       </v-app-bar-title>
 
-      <v-spacer />
-
-      <!-- Map Layer Controls in App Bar -->
-      <div class="research-app__layer-controls d-flex align-center ga-2 mr-4">
-        <span class="text-overline font-weight-bold mr-1 d-none d-sm-inline" style="font-size: 0.65rem !important">Map Layers</span>
-        <v-tooltip v-for="f in filters" :key="f.key" location="bottom">
-          <template v-slot:activator="{ props }">
-            <v-btn
-              v-bind="props"
-              :variant="layers[f.key] ? 'flat' : 'tonal'"
-              size="x-small"
-              icon
-              :color="layers[f.key] ? f.color : 'surface-variant'"
-              class="research-app__layer-btn"
-              @click="layers[f.key] = !layers[f.key]">
-              <v-icon :icon="f.icon" size="18" />
-            </v-btn>
-          </template>
-          <span>{{ f.label }}</span>
-        </v-tooltip>
-      </div>
-
-      <v-chip size="small" variant="tonal" color="primary" class="research-app__time">
-        {{ currentTime }}
-      </v-chip>
-
-      <v-btn icon color="primary" @click="rightDrawer = !rightDrawer">
-        <v-icon>mdi-chart-timeline-variant</v-icon>
-      </v-btn>
     </v-app-bar>
 
-    <!-- Left Drawer: Context (Login, History, Search) -->
-    <v-navigation-drawer v-model="leftDrawer" permanent width="360" class="research-drawer research-drawer--left">
+    <v-snackbar v-model="notice.show" location="bottom" :timeout="8000" color="error" multi-line>
+      {{ notice.text }}
+      <template #actions>
+        <v-btn variant="text" @click="notice.show = false">Close</v-btn>
+      </template>
+    </v-snackbar>
+
+    <!-- One planning panel, top to bottom: traveler, request, route. -->
+    <v-navigation-drawer v-model="leftDrawer" permanent width="400" class="research-drawer">
       <div class="research-drawer__content">
-        <div class="research-drawer__controls">
-          <UserLogin @submit-user-id="fetchUserHistory" />
+        <TravelerPanel
+          :user-id="userId"
+          :user-history="userHistory"
+          @submit-user-id="fetchUserHistory"
+          @delete-all="delUserHistory"
+          @delete-one="delOneHistory"
+          @focus-place="handleFocusPlace" />
 
-          <SearchPanel
-            @submit-search-place-id="searchPlaceId"
-            @submit-search-place-cat="searchPlaceCat"
-            @clear-search-results="clearSearchResults"
-            :no-search-res="noSearchRes"
-            :all-cat="allCat" />
-        </div>
+        <IntentPanel
+          :intent="intent"
+          :controls="intentControls"
+          :is-parsing="isParsingIntent"
+          :parse-error="intentError"
+          @submit-request="parseIntent"
+          @clear-request="clearIntent"
+          @edit-intent="editIntent" />
 
-        <v-divider class="mb-4" />
-
-        <section class="evidence-panel">
-          <v-tabs
-            v-model="activeEvidenceTab"
-            color="primary"
-            density="compact"
-            grow
-            class="evidence-panel__tabs">
-            <v-tab value="history" class="evidence-panel__tab">
-              History
-              <v-chip size="x-small" variant="tonal" color="secondary" class="ml-2">
-                {{ userHistory.length }}
-              </v-chip>
-            </v-tab>
-            <v-tab value="search" class="evidence-panel__tab">
-              Search
-              <v-chip size="x-small" variant="tonal" color="warning" class="ml-2">
-                {{ showSearch.length }}
-              </v-chip>
-            </v-tab>
-          </v-tabs>
-
-          <v-window v-model="activeEvidenceTab" class="evidence-panel__window">
-            <v-window-item value="history" class="evidence-panel__item">
-              <HistoryList
-                :user-history="userHistory"
-                @delete-all="delUserHistory"
-                @delete-one="delOneHistory"
-                @focus-place="handleFocusPlace" />
-            </v-window-item>
-
-            <v-window-item value="search" class="evidence-panel__item">
-              <section class="search-results">
-                <div class="search-results__header">
-                  <div>
-                    <div class="text-overline text-warning font-weight-bold">Search Results</div>
-                    <h2 class="search-results__title">Retrieved Candidates</h2>
-                  </div>
-
-                  <v-chip size="small" variant="tonal" color="warning" class="search-results__count">
-                    {{ showSearch.length }} POIs
-                  </v-chip>
-                </div>
-
-                <div class="search-results__body">
-                  <div v-if="!showSearch || showSearch.length === 0" class="search-results__empty">
-                    <v-icon icon="mdi-database-search-outline" size="30" color="warning" />
-                    <div class="search-results__empty-title">No retrieved candidates</div>
-                    <div class="search-results__empty-text">Search by POI ID or category.</div>
-                  </div>
-
-                  <div v-else class="d-flex flex-column">
-                    <PlaceCard
-                      v-for="(e, index) in showSearch"
-                      :key="e.raw_poi_id"
-                      :place="e"
-                      :show-add="true"
-                      :index="index"
-                      context="search"
-                      @submit-add-history="addUserHistory"
-                      @focus-place="handleFocusPlace"
-                      density="compact" />
-                  </div>
-                </div>
-              </section>
-            </v-window-item>
-          </v-window>
-        </section>
-      </div>
-    </v-navigation-drawer>
-
-    <!-- Right Drawer: Model Recommendations -->
-    <v-navigation-drawer v-model="rightDrawer" location="right" permanent width="360" class="research-drawer research-drawer--right">
-      <div class="research-drawer__content">
         <RecommendPanel
-          class="flex-grow-1"
           :recommendations="showRecommend"
           :is-inferring="isInferring"
           :hist="userHistPlace"
+          :evidence="routeEvidence"
+          :explanation="explanation"
+          :explain-model="explainModel"
+          :explain-error="explainError"
+          :is-explaining="isExplaining"
+          v-model:open-step="openStep"
+          :hovered-step="hoveredStep"
+          @hover-step="hoveredStep = $event"
           @trigger-inference="getNextPOI"
-          @update-currentRound="nowRecRound = $event"
           @focus-place="handleFocusPlace"
           @submit-add-history="addUserHistory" />
-        
-        <ChatPanel v-model="isChatPanelOpen" :show-str="showStr" :is-explaining="isExplaining" />
       </div>
     </v-navigation-drawer>
 
     <v-main class="research-main">
-      <MapCanvas
-        :show-recommend="showRecommend"
-        :now-rec-round="nowRecRound"
-        :show-search="showSearch"
-        :user-hist="userHistPlace"
-        :focused-place="focusedPlace"
-        :layers="layers"
-        @submit-add-history="addUserHistory" />
+      <div class="research-main__stage">
+        <MapCanvas
+          :show-recommend="showRecommend"
+          :show-search="showSearch"
+          :user-hist="userHistPlace"
+          :focused-place="focusedPlace"
+          :layers="layers"
+          :open-step="openStep"
+          :hovered-step="hoveredStep"
+          @toggle-layer="layers[$event] = !layers[$event]"
+          @select-step="openStep = $event"
+          @submit-add-history="addUserHistory" />
+
+        <SearchPanel
+          class="research-main__search"
+          :no-search-res="noSearchRes"
+          :all-cat="allCat"
+          :results="showSearch"
+          :can-add="userId != null"
+          @submit-search-place-id="searchPlaceId"
+          @submit-search-place-cat="searchPlaceCat"
+          @clear-search-results="clearSearchResults"
+          @focus-place="handleFocusPlace"
+          @submit-add-history="addUserHistory" />
+      </div>
     </v-main>
   </v-app>
 </template>
@@ -380,158 +355,36 @@
 
   .research-app__title {
     font-size: 1.25rem;
-    font-weight: 800;
+    font-weight: 700;
     letter-spacing: -0.03em;
     text-transform: lowercase;
-    opacity: 0.9;
-  }
-
-  .research-app__time {
-    font-weight: 700;
-    margin-right: 12px;
-  }
-
-  .research-app__layer-btn {
-    border-radius: 8px !important;
-    transition: transform 0.2s ease;
-  }
-
-  .research-app__layer-btn:hover {
-    transform: translateY(-2px);
   }
 
   .research-drawer {
     background: rgb(var(--v-theme-surface));
-  }
-
-  .research-drawer--left {
     border-right: 1px solid rgba(var(--v-border-color), 0.18);
   }
 
-  .research-drawer--right {
-    border-left: 1px solid rgba(var(--v-border-color), 0.18);
-  }
-
+  /* The whole panel scrolls as one column: traveler, request, then the route. */
   .research-drawer__content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    min-height: 0;
-    padding: 14px;
-  }
-
-  .research-drawer__controls {
-    flex-shrink: 0;
-  }
-
-  .evidence-panel {
-    display: flex;
-    flex: 1 1 auto;
-    flex-direction: column;
-    margin: 0 4px 14px;
-    min-height: 0;
-  }
-
-  .evidence-panel__tabs {
-    background: rgb(var(--v-theme-surface));
-    border: 1px solid rgba(var(--v-border-color), 0.22);
-    flex-shrink: 0;
-  }
-
-  .evidence-panel__tab {
-    font-weight: 800;
-    letter-spacing: 0;
-    min-width: 0;
-    font-size: 0.75rem;
-  }
-
-  .evidence-panel__window {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    padding-top: 12px;
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-  }
-
-  .evidence-panel__window::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  .evidence-panel__window::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  .evidence-panel__window::-webkit-scrollbar-thumb {
-    background: rgba(var(--v-theme-on-surface), 0.24);
-    border-radius: 999px;
-  }
-
-  .evidence-panel__item {
-    min-height: 100%;
-  }
-
-  .search-results {
-    margin: 0;
-  }
-
-  .search-results__header {
-    align-items: flex-start;
-    border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
-    display: flex;
-    gap: 12px;
-    justify-content: space-between;
-    padding: 2px 2px 10px;
-  }
-
-  .search-results__title {
-    color: rgb(var(--v-theme-on-surface));
-    font-size: 1.05rem;
-    font-weight: 800;
-    line-height: 1.25;
-    margin: 0;
-  }
-
-  .search-results__count {
-    flex-shrink: 0;
-    font-weight: 700;
-    margin-top: 4px;
-  }
-
-  .search-results__body {
-    background: rgb(var(--v-theme-surface));
-    border: 1px solid rgba(var(--v-border-color), 0.22);
-    margin-top: 12px;
-    min-height: 170px;
-    overflow: visible;
-    padding: 8px 4px;
-  }
-
-  .search-results__empty {
-    align-items: center;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 150px;
-    padding: 20px 16px;
-    text-align: center;
-  }
-
-  .search-results__empty-title {
-    color: rgb(var(--v-theme-on-surface));
-    font-size: 0.9rem;
-    font-weight: 800;
-    margin-top: 10px;
-  }
-
-  .search-results__empty-text {
-    color: rgba(var(--v-theme-on-surface), 0.68);
-    font-size: 0.76rem;
-    line-height: 1.35;
-    margin-top: 3px;
+    padding: 16px;
   }
 
   .research-main {
     min-height: 0;
+  }
+
+  /* v-main spans the window under the panel and bar; the stage is just the map's area. */
+  .research-main__stage {
+    height: 100%;
+    position: relative;
+  }
+
+  .research-main__search {
+    left: 12px;
+    position: absolute;
+    top: 12px;
+    width: min(380px, calc(100% - 24px));
+    z-index: 5;
   }
 </style>

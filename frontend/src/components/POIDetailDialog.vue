@@ -1,6 +1,6 @@
 <script lang="ts" setup>
   import { ref, watch } from 'vue'
-  import axios from 'axios'
+  import { api } from '@/api'
   import type { GowallaPlace } from '@/types/place'
 
   const props = defineProps<{
@@ -24,11 +24,11 @@
     semanticData.value = null
     
     try {
-      const response = await axios.get(`http://127.0.0.1:5000/api/poi/detail/${props.place.raw_poi_id}`)
+      const response = await api.get(`/poi/detail/${props.place.raw_poi_id}`)
       semanticData.value = response.data
     } catch (err) {
       console.error('Failed to fetch POI semantic details:', err)
-      error.value = 'Failed to load extended semantic information.'
+      error.value = "Couldn't load this place's details. Try again."
     } finally {
       loading.value = false
     }
@@ -48,18 +48,18 @@
 <template>
   <v-dialog :model-value="modelValue" @update:model-value="close" max-width="600px" scrollable>
     <v-card class="semantic-dialog">
-      <v-toolbar color="primary" density="comfortable">
+      <v-toolbar color="surface" density="comfortable" class="semantic-dialog__bar">
         <v-toolbar-title class="text-subtitle-1 font-weight-bold">
-          POI Semantic Profile: {{ place?.category_name }}
+          {{ place?.category_name?.trim() || "Place" }}
         </v-toolbar-title>
         <v-spacer />
-        <v-btn icon="mdi-close" variant="text" @click="close" />
+        <v-btn icon="mdi-close" variant="text" aria-label="Close" @click="close" />
       </v-toolbar>
 
       <v-card-text class="pa-6">
         <div v-if="loading" class="d-flex flex-column align-center py-10">
-          <v-progress-circular indeterminate color="primary" size="64" width="6" />
-          <div class="mt-4 text-overline text-medium-emphasis">Extracting spatial semantics...</div>
+          <v-progress-circular indeterminate color="primary" size="40" width="4" />
+          <div class="mt-4 text-body-2 text-medium-emphasis">Loading place details…</div>
         </div>
 
         <div v-else-if="error" class="text-center py-10">
@@ -69,14 +69,14 @@
 
         <div v-else-if="semanticData" class="semantic-content">
           <section class="mb-6">
-            <div class="text-overline text-primary font-weight-bold mb-3">Core Identity</div>
+            <h3 class="semantic-dialog__section">Place</h3>
             <v-row dense>
               <v-col cols="6">
-                <div class="text-caption text-medium-emphasis">System Identifier</div>
+                <div class="text-caption text-medium-emphasis">Place ID</div>
                 <div class="text-body-2 font-weight-bold">{{ place?.raw_poi_id }}</div>
               </v-col>
               <v-col cols="6">
-                <div class="text-caption text-medium-emphasis">Academic Category</div>
+                <div class="text-caption text-medium-emphasis">Place type</div>
                 <div class="text-body-2 font-weight-bold">{{ semanticData.semantic_information?.cat_name }}</div>
               </v-col>
             </v-row>
@@ -85,7 +85,7 @@
           <v-divider class="mb-6" />
 
           <section class="mb-6">
-            <div class="text-overline text-primary font-weight-bold mb-3">Spatial Context (OSM)</div>
+            <h3 class="semantic-dialog__section">Address (OpenStreetMap)</h3>
             <div v-if="semanticData.semantic_information?.address" class="address-grid">
               <v-list density="compact" class="pa-0 bg-transparent">
                 <v-list-item v-for="(val, key) in semanticData.semantic_information.address" :key="key" class="px-0">
@@ -100,20 +100,20 @@
               </v-list>
             </div>
             <div v-else class="text-caption text-medium-emphasis italic">
-              No detailed spatial address available for this coordinate.
+              No address found for these coordinates.
             </div>
           </section>
 
           <v-divider class="mb-6" />
 
           <section>
-            <div class="text-overline text-primary font-weight-bold mb-3">Geographic Coordinates</div>
+            <h3 class="semantic-dialog__section">Coordinates</h3>
             <div class="d-flex align-center ga-4">
-              <v-chip size="small" variant="tonal" color="primary">
-                LAT: {{ place?.latitude.toFixed(6) }}
+              <v-chip size="small" variant="tonal">
+                Lat {{ place?.latitude.toFixed(6) }}
               </v-chip>
-              <v-chip size="small" variant="tonal" color="primary">
-                LON: {{ place?.longitude.toFixed(6) }}
+              <v-chip size="small" variant="tonal">
+                Lng {{ place?.longitude.toFixed(6) }}
               </v-chip>
               <v-spacer />
               <v-btn
@@ -122,8 +122,9 @@
                 size="small"
                 prepend-icon="mdi-google-maps"
                 :href="`https://www.google.com/maps/search/?api=1&query=${place?.latitude},${place?.longitude}`"
-                target="_blank">
-                View on Maps
+                target="_blank"
+                class="semantic-dialog__link">
+                Open in Google Maps
               </v-btn>
             </div>
           </section>
@@ -148,8 +149,25 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
-  .text-overline {
-    line-height: 1.2 !important;
-    letter-spacing: 0.1em !important;
+  .semantic-dialog__bar {
+    border-bottom: 1px solid rgba(var(--v-border-color), 0.18);
+  }
+
+  .semantic-dialog__section {
+    color: rgb(var(--v-theme-on-surface));
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 0 0 12px;
+  }
+
+  .semantic-dialog__link {
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .semantic-content {
+      animation: none;
+    }
   }
 </style>
