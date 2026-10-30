@@ -224,6 +224,7 @@ def run_f(setup: Setup, args, rng: np.random.Generator) -> dict[str, Any]:
             row[f"{name} same_as_last"] = (sum(c == last_cat for c in cats) / len(cats)
                                           if cats else 0.0)
             row[f"{name} hop_km"] = float(np.mean(hops)) if hops else 0.0
+            row[f"{name} hops"] = hops
         per_case.append(row)
         if i % 250 == 0:
             print(f"F {i}/{len(cases)}", flush=True)
@@ -238,6 +239,8 @@ def run_f(setup: Setup, args, rng: np.random.Generator) -> dict[str, Any]:
         accuracy[f"HR@10 {a} - {b}"] = bootstrap(diff, rng, args.resamples)
     routes = {name: {m: agg(f"{name} {m}") for m in ("repeat", "same_as_last", "hop_km")}
               for name in ("P", "R")}
+    if args.rows_out:
+        args.rows_out.write_text(json.dumps(per_case), encoding="utf-8")
     return {"cases": len(per_case), "filters": counts, "accuracy": accuracy, "routes": routes}
 
 
@@ -297,8 +300,10 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--resamples", type=int, default=1000)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--rows-out", type=Path, default=None,
+                        help="F only: also write each case's ranks and route hops (for E-R)")
     args = parser.parse_args()
-    defaults = {"C": (1000, 10), "F": (2000, 11), "E": (400, 11)}[args.experiment]
+    defaults ={"C": (1000, 10), "F": (2000, 11), "E": (400, 11)}[args.experiment]
     args.cases = args.cases or defaults[0]
     args.seed = args.seed if args.seed is not None else defaults[1]
     rng = np.random.default_rng(args.seed)

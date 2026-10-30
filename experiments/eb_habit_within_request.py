@@ -161,6 +161,8 @@ def main() -> None:
     parser.add_argument("--strength", choices=["soft", "firm"], default="soft")
     parser.add_argument("--resamples", type=int, default=1000)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--rows-out", type=Path, default=None,
+                        help="also write each case's ranks and scores (for E-R)")
     args = parser.parse_args()
 
     config = RecommendationConfig.from_env()
@@ -268,6 +270,8 @@ def main() -> None:
         "case_indices": [c["index"] for c in per_case],
     }
     args.out.write_text(json.dumps(result, indent=1), encoding="utf-8")
+    if args.rows_out:
+        args.rows_out.write_text(json.dumps(per_case), encoding="utf-8")
 
     print("\ntarget among the places each variant kept: "
           + ", ".join(f"{short(n)} {v:.1%}" for n, v in kept.items()))
