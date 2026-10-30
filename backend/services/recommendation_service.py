@@ -9,7 +9,8 @@ from typing import Any
 
 from contracts.evidence import EvidenceRecord, RouteEvidence, StageStatus
 from contracts.intent import Intent, SteeringControls
-from database import POI, UserHist
+from database import POI
+from services import visit_store
 from services.evidence_builder import build_step_records, poi_facts
 from services.intent_signal import IntentScorer
 from services.latest_model_adapter import (
@@ -82,11 +83,7 @@ class RecommendationService:
         the route planner; None leaves the ranking as steering produced it."""
 
         controls = controls or SteeringControls()
-        histories = (
-            UserHist.query.filter_by(user_id=int(user_id))
-            .order_by(UserHist.visit_time)
-            .all()
-        )
+        histories = visit_store.visits(int(user_id))
         history_raw_ids = [int(hist.poi_id) for hist in histories if hist.poi_id is not None]
         append_raw_ids = self._valid_append_raw_ids(append_back or [])
         session_raw_ids = history_raw_ids + append_raw_ids
