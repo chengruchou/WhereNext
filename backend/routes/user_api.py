@@ -1,22 +1,17 @@
 from datetime import datetime
 
-from database import UserHist, db
 from flask import Blueprint, jsonify, request
+from services import visit_store
 
 user_bp = Blueprint("user", __name__, url_prefix="/api/user")
+
+# The panel shows a traveler's latest visits, oldest first.
+SHOWN_VISITS = 10
 
 
 @user_bp.route("/<int:user_id>", methods=["GET"])
 def fetch(user_id):
-    data = (
-        UserHist.query.filter(UserHist.user_id == user_id)
-        .order_by(UserHist.visit_time.desc())
-        .limit(10)
-        .all()
-    )
-    if data is None:
-        return jsonify(None)
-    data = data[::-1]
+    data = visit_store.visits(user_id)[-SHOWN_VISITS:]
     return jsonify(
         {
             "userHist": [e.to_dict() for e in data],
@@ -28,27 +23,31 @@ def fetch(user_id):
 @user_bp.route("/<int:user_id>", methods=["POST"])
 def add(user_id):
     rq = request.json
-    print("rq", rq)
-    new_hist = UserHist(
-        user_id=user_id,
-        poi_id=rq["poi_id"],
-        visit_time=datetime.fromisoformat(rq.get("visit_time")),
-    )
-    db.session.add(new_hist)
-    db.session.commit()
+    visit_time = rq.get("visit_time")
+    try:
+        visit_store.add(
+            user_id,
+            int(rq["poi_id"]),
+            datetime.fromisoformat(visit_time) if visit_time else None,
+        )
+    except visit_store.EditRefused as exc:
+        return jsonify({"error": str(exc)}), 403
     return jsonify("write succeed")
 
 
 @user_bp.route("/<int:user_id>", methods=["DELETE"])
 def delete(user_id):
-    UserHist.query.filter(UserHist.user_id == user_id).delete()
-    db.session.commit()
-
+    try:
+        visit_store.clear(user_id)
+    except visit_store.EditRefused as exc:
+        return jsonify({"error": str(exc)}), 403
     return jsonify("delete succeed")
 
 
 @user_bp.route("delone/<int:log_id>", methods=["DELETE"])
 def delete_one(log_id):
-    db.session.delete(UserHist.query.get(log_id))
-    db.session.commit()
+    try:
+        visit_store.remove(log_id)
+    except visit_store.EditRefused as exc:
+        return jsonify({"error": str(exc)}), 403
     return jsonify("delete one succeed")
