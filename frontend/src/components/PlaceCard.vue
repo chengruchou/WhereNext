@@ -110,16 +110,16 @@
 
     <v-card-text :class="['pb-2', props.compact ? 'pt-0' : 'pt-1']">
       <div :class="['d-flex', 'flex-wrap', 'ga-2', props.compact ? 'mb-1' : 'mb-3']">
-        <v-chip size="small" variant="tonal" color="primary" class="place-card__id-chip">
-          POI ID: {{ props.place.raw_poi_id }}
+        <v-chip size="small" variant="tonal" class="place-card__id-chip">
+          Place {{ props.place.raw_poi_id }}
         </v-chip>
         <v-chip
           v-if="isRecommendation"
           size="small"
-          variant="flat"
+          variant="tonal"
           color="primary"
           class="place-card__id-chip">
-          Model recommendation
+          Recommended
         </v-chip>
       </div>
 
@@ -129,7 +129,6 @@
           :key="item.label"
           size="small"
           variant="tonal"
-          color="primary"
           class="place-card__metric">
           <v-icon :icon="item.icon" size="14" start />
           {{ item.value }} {{ item.label }}
@@ -164,19 +163,20 @@
             color="primary"
             block
             prepend-icon="mdi-plus"
+            class="place-card__action"
             @click.stop="addHistory">
-            Add to User History
+            Add to visits
           </v-btn>
         </v-card-actions>
 
         <v-card-actions class="px-4 pt-0 pb-2">
           <v-btn
-            variant="tonal"
-            color="secondary"
+            variant="outlined"
             block
             prepend-icon="mdi-open-in-new"
+            class="place-card__action"
             @click.stop="openDetail">
-            View Semantic Profile
+            Place details
           </v-btn>
         </v-card-actions>
       </div>
@@ -196,33 +196,18 @@
       box-shadow 0.18s ease;
   }
 
-  .place-card__title {
-    font-size: 1rem;
-    font-weight: 800;
-    line-height: 1.25;
-    color: rgb(var(--v-theme-on-surface));
-  }
-
-  .place-card__subtitle {
-    align-items: center;
-    color: rgba(var(--v-theme-on-surface), 0.78);
-    display: flex;
-    font-size: 0.78rem;
-    line-height: 1.2;
-  }
-
   .place-card--compact .place-card__title {
     font-size: 0.85rem !important;
     font-weight: 700;
   }
 
   .place-card--compact .place-card__subtitle {
-    font-size: 0.7rem !important;
+    font-size: 0.75rem !important;
   }
 
   .place-card--compact .v-chip {
-    height: 20px !important;
-    font-size: 0.65rem !important;
+    height: 22px !important;
+    font-size: 0.75rem !important;
   }
 
   .place-card--compact .v-divider {
@@ -242,15 +227,15 @@
 
   .place-card__rank-label {
     color: inherit;
-    font-size: 0.72rem;
-    font-weight: 800;
+    font-size: 0.75rem;
+    font-weight: 700;
     letter-spacing: 0;
     line-height: 1;
   }
 
   .place-card__title {
     font-size: 1rem;
-    font-weight: 800;
+    font-weight: 700;
     line-height: 1.25;
     color: rgb(var(--v-theme-on-surface));
   }
@@ -264,17 +249,19 @@
   }
 
   .place-card__id-chip {
-    font-weight: 700;
+    font-weight: 500;
   }
 
   .place-card__metric {
     color: rgb(var(--v-theme-on-surface));
-    font-weight: 700;
+    font-weight: 500;
   }
 
-  .place-card__details-btn {
-    font-weight: 800;
+  .place-card__details-btn,
+  .place-card__action {
+    font-weight: 500;
     letter-spacing: 0;
+    text-transform: none;
   }
 
   .place-card__chevron {

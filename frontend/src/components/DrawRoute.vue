@@ -3,7 +3,8 @@
   import type { GowallaPlace } from "@/types/place"
   import { decode } from "@googlemaps/polyline-codec"
   import { Polyline, InfoWindow } from "vue3-google-map"
-  import axios from "axios"
+  import { api } from "@/api"
+  import { palette } from "@/styles/palette"
 
   interface PathInfo {
     path: { lat: number; lng: number }[]
@@ -13,12 +14,14 @@
     type: string
   }
 
-  const api = axios.create({ baseURL: "http://127.0.0.1:5000/api" })
   const props = defineProps<{
     points: GowallaPlace[]
     type: string
     color?: string
     innerColor?: string
+    highlighted?: boolean
+    // Routes API travel mode: DRIVE, WALK or TRANSIT.
+    mode?: string
   }>()
 
   const showPath = ref<PathInfo | null>(null)
@@ -26,6 +29,18 @@
   const showInfo = ref(false)
   const infoPosition = ref<{ lat: number; lng: number } | null>(null)
   const isHovering = ref(false)
+  const emphasized = computed(() => isHovering.value || Boolean(props.highlighted))
+
+  // Without a road route (no routing key, or Google found none), the points are joined by
+  // straight dashed lines, so they do not pass for roads; a duration of "0s" keeps the
+  // travel-time popup closed for them.
+  const straightPath = (points: GowallaPlace[]): PathInfo | null => {
+    const path = points
+      .filter((p) => p && p.latitude != null && p.longitude != null)
+      .map((p) => ({ lat: p.latitude, lng: p.longitude }))
+    if (path.length < 2) return null
+    return { path, midPoint: null, duration: "0s", distance: 0, type: "STRAIGHT" }
+  }
 
   const handleRouteClick = (event: any) => {
     if (event.latLng) {
@@ -43,7 +58,10 @@
       const time = new Date().toISOString()
       const res = (await api.post("/route/", { points: points, time: time, type: type })).data
       const route = res["route"]
-      if (!route) return null
+      if (!route) {
+        console.info("No road route:", res["message"])
+        return null
+      }
 
       const encodedPolyline = route.polyline.encodedPolyline
       const decodedTuple = decode(encodedPolyline)
@@ -71,13 +89,10 @@
   })
 
   watch(
-    () => propsPointStr.value,
+    () => [propsPointStr.value, props.mode],
     async () => {
-      showPath.value = await fetchRoutePath(
-        props.points,
-        // props.type === "hist" ? "WALK" : "TRANSIT"
-        "DRIVE",
-      )
+      showPath.value =
+        (await fetchRoutePath(props.points, props.mode ?? "DRIVE")) ?? straightPath(props.points)
     },
     { immediate: true },
   )
@@ -97,15 +112,35 @@
 </script>
 
 <template>
-  <template v-if="showPath && showPath.path.length > 0">
-    <!-- Base Line (Solid) -->
+  <!-- Straight fallback: one dashed line. -->
+  <Polyline
+    v-if="showPath && showPath.type === 'STRAIGHT'"
+    :options="{
+      path: showPath.path,
+      strokeOpacity: 0,
+      zIndex: emphasized ? 3 : 1,
+      icons: [
+        {
+          icon: {
+            path: 'M 0,-1 0,1',
+            strokeColor: props.type === 'hist' ? palette.neutral : palette.accent,
+            strokeOpacity: 1,
+            scale: emphasized ? 4 : 3,
+          },
+          offset: '0',
+          repeat: '14px',
+        },
+      ],
+    }" />
+  <template v-else-if="showPath && showPath.path.length > 0">
+    <!-- Road route: an outline under the colored line. -->
     <Polyline
       :options="{
         path: showPath.path,
-        strokeColor: props.type === 'hist' ? '#000000' : '#470DFA',
-        strokeOpacity: isHovering ? 0.8 : 1,
-        strokeWeight: isHovering ? 10 : 7,
-        zIndex: 1,
+        strokeColor: props.type === 'hist' ? palette.neutralStrong : palette.accentStrong,
+        strokeOpacity: emphasized ? 0.8 : 1,
+        strokeWeight: emphasized ? 10 : 7,
+        zIndex: emphasized ? 3 : 1,
         cursor: 'pointer',
       }"
       @click="handleRouteClick"
@@ -114,10 +149,10 @@
     <Polyline
       :options="{
         path: showPath.path,
-        strokeColor: props.type === 'hist' ? '#470DFA' : '#B6C8FF',
+        strokeColor: props.type === 'hist' ? palette.neutralSoft : palette.accent,
         strokeOpacity: 1,
-        strokeWeight: isHovering ? 7 : 5,
-        zIndex: 2,
+        strokeWeight: emphasized ? 7 : 5,
+        zIndex: emphasized ? 4 : 2,
         cursor: 'pointer',
       }"
       @click="handleRouteClick"
@@ -160,7 +195,7 @@
   .route-info-window {
     color: #333333;
     font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
     display: flex;
     gap: 8px;
     align-items: center;

@@ -1,21 +1,41 @@
 <script lang="ts" setup>
-  import { ref, reactive, watch, computed } from "vue"
+  import { ref, watch, computed } from "vue"
   import type { GowallaPlace } from "@/types/place"
   import { GoogleMap, AdvancedMarker, InfoWindow } from "vue3-google-map"
+  import { palette } from "@/styles/palette"
   import DrawRoute from "./DrawRoute.vue"
   import PlaceCard from "./PlaceCard.vue"
 
+  // Visits are neutral, search results are outlined, and route stops carry the accent,
+  // the same blue as the stop badges in the route panel.
+  const PINS = {
+    visit: { background: palette.neutral, borderColor: palette.neutralStrong, glyphColor: "white" },
+    search: { background: "white", borderColor: palette.neutralStrong, glyphColor: palette.neutralStrong },
+    stop: { background: palette.accent, borderColor: palette.accentStrong, glyphColor: "white" },
+    option: { background: "white", borderColor: palette.accent, glyphColor: palette.accent },
+  }
+
+  type LayerKey = "hist" | "search" | "rec"
+
   const apiKey = import.meta.env.VITE_GOOGLE_API_KEY
+  // Pins need a vector map ID from the same Google Cloud project as the key.
+  const mapId = import.meta.env.VITE_GOOGLE_MAP_ID || "506622965fe133bac9a880a1"
+  const ROUTE_MODES: Record<string, string> = { walk: "WALK", drive: "DRIVE", transit: "TRANSIT" }
+
   const props = defineProps<{
     showSearch: GowallaPlace[]
     showRecommend: GowallaPlace[][]
-    nowRecRound: number
     userHist: GowallaPlace[]
     focusedPlace: GowallaPlace | null
-    layers: { hist: boolean; search: boolean; rec: boolean }
+    layers: Record<LayerKey, boolean>
+    openStep: number | null
+    hoveredStep: number | null
+    travelMode: string
   }>()
   const emit = defineEmits<{
     (e: "submit-add-history", payload: { passPlace: GowallaPlace | null }): void
+    (e: "toggle-layer", key: LayerKey): void
+    (e: "select-step", index: number): void
   }>()
 
   const center = ref({ lat: 39.0528237667, lng: -94.59031105 })
@@ -26,95 +46,119 @@
   const showPointContext = ref<"search" | "recommendation" | "history">("search")
   const showAdd = ref(true)
 
-  const addHistory = async (place: GowallaPlace) => {
-    emit("submit-add-history", { passPlace: place })
+  const openInfo = (
+    place: GowallaPlace,
+    index: number,
+    context: "search" | "recommendation" | "history",
+  ) => {
+    showPoint.value = place
+    showPointIndex.value = index
+    showPointContext.value = context
+    showAdd.value = context !== "history"
   }
-  const topPlaces = computed(() => {
-    return props.showRecommend
-      .map((round) => {
-        if (round && round.length > 0) {
-          return round[0]
-        }
-        return null
-      })
-      .filter((p): p is GowallaPlace => p !== null)
+
+  const lastVisit = computed(() => props.userHist.at(-1) ?? null)
+  const stops = computed(() =>
+    props.showRecommend.map((round) => round?.[0]).filter((p): p is GowallaPlace => Boolean(p)),
+  )
+
+  // One leg per stop, from the last visit through the route in order.
+  const legs = computed(() => {
+    const legs: GowallaPlace[][] = []
+    let previous = lastVisit.value
+    for (const stop of stops.value) {
+      if (previous) legs.push([previous, stop])
+      previous = stop
+    }
+    return legs
   })
-  const recRoutes = computed(() => {
-    const routes: GowallaPlace[][] = []
-    if (
-      props.userHist &&
-      props.userHist.length > 0 &&
-      props.showRecommend &&
-      props.nowRecRound >= 0
-    ) {
-      let lastPlace = props.userHist[props.userHist.length - 1]
-      for (let i: number = 0; i <= props.nowRecRound; i++) {
-        if (!props.showRecommend[i] || !props.showRecommend[i][0]) continue
-        routes.push([lastPlace, props.showRecommend[i][0]])
-        lastPlace = props.showRecommend[i][0]
+
+  // The other candidates of the stop whose details are open in the route panel.
+  const options = computed(() =>
+    props.openStep == null ? [] : (props.showRecommend[props.openStep] ?? []).slice(1),
+  )
+
+  const isActive = (index: number) => props.hoveredStep === index || props.openStep === index
+
+  const fitTo = (places: (GowallaPlace | null)[]) => {
+    const points = places.filter(
+      (p): p is GowallaPlace => p != null && p.latitude != null && p.longitude != null,
+    )
+    // The map may still be loading right after a change; give it a moment.
+    setTimeout(() => {
+      const map = mapRef.value?.map
+      if (!points.length || !map) return
+      if (points.length === 1) {
+        center.value = { lat: points[0].latitude, lng: points[0].longitude }
+        map.panTo(center.value)
+        map.setZoom(15)
+        return
       }
-    }
-    return routes
-  })
-
-  const visiblePoints = computed(() => {
-    const points: GowallaPlace[] = []
-    if (props.layers.hist && props.userHist) points.push(...props.userHist)
-    if (props.layers.search && props.showSearch) points.push(...props.showSearch)
-    if (props.layers.rec && props.showRecommend && props.showRecommend[props.nowRecRound]) {
-      points.push(...props.showRecommend[props.nowRecRound])
-    }
-    if (props.layers.rec && topPlaces) points.push(...topPlaces.value)
-
-    return points.filter((p) => p && p.latitude != null && p.longitude != null)
-  })
-
-  const fitMapToVisiblePoints = (places: GowallaPlace[]) => {
-    if (!places.length || !mapRef.value?.map) return
-
-    if (places.length === 1) {
-      center.value = { lat: places[0].latitude, lng: places[0].longitude }
-      mapRef.value.map.panTo(center.value)
-      mapRef.value.map.setZoom(15)
-      return
-    }
-    let minLat = 90
-    let maxLat = -90
-    let minLng = 180
-    let maxLng = -180
-    places.forEach((p) => {
-      if (p.latitude < minLat) minLat = p.latitude
-      if (p.latitude > maxLat) maxLat = p.latitude
-      if (p.longitude < minLng) minLng = p.longitude
-      if (p.longitude > maxLng) maxLng = p.longitude
-    })
-    mapRef.value.map.fitBounds({
-      south: minLat,
-      north: maxLat,
-      west: minLng,
-      east: maxLng,
-    })
+      map.fitBounds(
+        {
+          south: Math.min(...points.map((p) => p.latitude)),
+          north: Math.max(...points.map((p) => p.latitude)),
+          west: Math.min(...points.map((p) => p.longitude)),
+          east: Math.max(...points.map((p) => p.longitude)),
+        },
+        64,
+      )
+    }, 100)
   }
+
+  const fitRoute = () => fitTo([lastVisit.value, ...stops.value])
+
+  // The map frames whatever changed last: a new route, an opened stop, a search, a traveler.
+  watch(() => props.showRecommend, () => stops.value.length > 0 && fitRoute())
 
   watch(
-    visiblePoints,
-    (newPoints) => {
-      setTimeout(() => fitMapToVisiblePoints(newPoints), 100)
+    () => props.openStep,
+    (step) => {
+      if (step == null) {
+        if (stops.value.length > 0) fitRoute()
+        return
+      }
+      const from = step === 0 ? lastVisit.value : stops.value[step - 1]
+      fitTo([from, stops.value[step], ...options.value])
     },
-    { deep: true, immediate: true },
+  )
+
+  watch(
+    () => props.showSearch,
+    (results) => results.length > 0 && fitTo(results),
+  )
+
+  watch(
+    () => props.userHist,
+    (visits) => stops.value.length === 0 && fitTo(visits),
+    { immediate: true },
   )
 
   watch(
     () => props.focusedPlace,
-    (newVal) => {
-      if (newVal && mapRef.value?.map) {
-        center.value = { lat: newVal.latitude, lng: newVal.longitude }
+    (place) => {
+      if (place && mapRef.value?.map) {
+        center.value = { lat: place.latitude, lng: place.longitude }
         mapRef.value.map.panTo(center.value)
         mapRef.value.map.setZoom(15)
       }
     },
-    { deep: true },
   )
+
+  const legend = computed(() => {
+    const items: { key: LayerKey; label: string; swatch: Record<string, string> }[] = [
+      { key: "hist", label: "Visits", swatch: { background: palette.neutral } },
+      { key: "rec", label: "Route", swatch: { background: palette.accent } },
+    ]
+    if (props.showSearch.length > 0) {
+      items.push({
+        key: "search",
+        label: "Search results",
+        swatch: { background: "white", border: `2px solid ${palette.neutralStrong}` },
+      })
+    }
+    return items
+  })
 </script>
 
 <template>
@@ -122,7 +166,7 @@
     <GoogleMap
       ref="mapRef"
       :api-key="apiKey"
-      map-id="506622965fe133bac9a880a1"
+      :map-id="mapId"
       style="width: 100%; height: 100%"
       :center="center"
       :zoom="15"
@@ -132,24 +176,14 @@
         <DrawRoute :points="props.userHist" :type="'hist'" />
         <AdvancedMarker
           v-for="(e, index) in props.userHist"
-          :key="e.raw_poi_id"
+          :key="'visit-' + e.raw_poi_id + '-' + index"
           :options="{
             position: { lat: e.latitude, lng: e.longitude },
-            title: `History ${index + 1}: ${e.category_name}`,
+            gmpClickable: true,
+            title: `Visit ${index + 1}: ${e.category_name}`,
           }"
-          :pinOptions="{
-            background: '#470DFA',
-            glyphText: String(index + 1),
-            glyphColor: 'white',
-            borderColor: '#000000',
-            scale: 0.8,
-          }"
-          @click="
-            ((showPoint = e),
-            (showAdd = false),
-            (showPointIndex = index),
-            (showPointContext = 'history'))
-          " />
+          :pinOptions="{ ...PINS.visit, glyphText: String(index + 1), scale: 0.8 }"
+          @click="openInfo(e, index, 'history')" />
       </template>
 
       <template v-if="props.layers.search">
@@ -158,74 +192,46 @@
           :key="'search-' + e.raw_poi_id"
           :options="{
             position: { lat: e.latitude, lng: e.longitude },
-            title: `Search: ${e.category_name}`,
+            gmpClickable: true,
+            title: `Search result: ${e.category_name}`,
           }"
-          :pinOptions="{
-            background: '#FF6D00',
-            borderColor: '#E65100',
-            scale: 0.7,
-          }"
-          @click="
-            ((showPoint = e),
-            (showAdd = true),
-            (showPointIndex = index),
-            (showPointContext = 'search'))
-          " />
+          :pinOptions="{ ...PINS.search, scale: 0.7 }"
+          @click="openInfo(e, index, 'search')" />
       </template>
 
       <template v-if="props.layers.rec">
         <DrawRoute
-          v-for="(e, idx) in recRoutes"
-          :key="idx"
-          v-if="topPlaces.length > 0"
-          :points="e"
-          :type="'rec'" />
+          v-for="(leg, index) in legs"
+          :key="'leg-' + index + '-' + leg[1].raw_poi_id"
+          :points="leg"
+          :type="'rec'"
+          :mode="ROUTE_MODES[props.travelMode] ?? 'DRIVE'"
+          :highlighted="isActive(index)" />
 
-        <template v-for="(es, roundId) in props.showRecommend">
-          <template v-if="roundId == nowRecRound">
-            <template v-for="(e, index) in es" :key="'rec-' + roundId + '-' + e.raw_poi_id">
-              <AdvancedMarker
-                v-if="index === 0 || (props.focusedPlace && props.focusedPlace.raw_poi_id === e.raw_poi_id)"
-                :options="{
-                  position: { lat: e.latitude, lng: e.longitude },
-                  title: `Round ${roundId + 1} Rec ${index + 1}: ${e.category_name}`,
-                }"
-                :pinOptions="{
-                  background: '#2962FF',
-                  glyphText: index === 0 ? String(roundId + 1) : String(index + 1),
-                  glyphColor: 'white',
-                  borderColor: '#1A237E',
-                  scale: index === 0 ? 1.0 : 0.7,
-                }"
-                @click="
-                  ((showPoint = e),
-                  (showAdd = true),
-                  (showPointIndex = index),
-                  (showPointContext = 'recommendation'))
-                " />
-            </template>
-          </template>
-          <template v-else-if="roundId < nowRecRound">
-            <AdvancedMarker
-              :options="{
-                position: { lat: es[0].latitude, lng: es[0].longitude },
-                title: `Round ${roundId + 1}: ${es[0].category_name}`,
-              }"
-              :pinOptions="{
-                background: roundId === 0 ? '#9FA8DA' : '#7986CB',
-                glyphText: String(roundId + 1),
-                glyphColor: 'white',
-                borderColor: '#3F51B5',
-                scale: 0.9,
-              }"
-              @click="
-                ((showPoint = es[0]),
-                (showAdd = true),
-                (showPointIndex = 0),
-                (showPointContext = 'recommendation'))
-              " />
-          </template>
-        </template>
+        <AdvancedMarker
+          v-for="(e, index) in options"
+          :key="'option-' + e.raw_poi_id"
+          :options="{
+            position: { lat: e.latitude, lng: e.longitude },
+            gmpClickable: true,
+            title: `Other option for stop ${(props.openStep ?? 0) + 1}: ${e.category_name}`,
+            zIndex: 5,
+          }"
+          :pinOptions="{ ...PINS.option, glyphText: '', scale: 0.7 }"
+          @click="openInfo(e, index + 1, 'recommendation')" />
+
+        <!-- Recreated when its state changes, so the pin's size and order always match. -->
+        <AdvancedMarker
+          v-for="(e, index) in stops"
+          :key="'stop-' + index + '-' + e.raw_poi_id + (isActive(index) ? '-active' : '')"
+          :options="{
+            position: { lat: e.latitude, lng: e.longitude },
+            gmpClickable: true,
+            title: `Stop ${index + 1}: ${e.category_name}`,
+            zIndex: isActive(index) ? 100 : 10 + index,
+          }"
+          :pinOptions="{ ...PINS.stop, glyphText: String(index + 1), scale: isActive(index) ? 1.3 : 1 }"
+          @click="emit('select-step', index)" />
       </template>
 
       <InfoWindow
@@ -243,12 +249,34 @@
                 :index="showPointIndex"
                 :context="showPointContext"
                 compact
-                @submit-add-history="addHistory(showPoint)" />
+                @submit-add-history="emit('submit-add-history', { passPlace: showPoint })" />
             </div>
           </v-theme-provider>
         </div>
       </InfoWindow>
     </GoogleMap>
+
+    <div class="map-legend" role="group" aria-label="Map layers">
+      <button
+        v-for="item in legend"
+        :key="item.key"
+        type="button"
+        class="map-legend__item"
+        :class="{ 'map-legend__item--off': !props.layers[item.key] }"
+        :aria-pressed="props.layers[item.key]"
+        :title="props.layers[item.key] ? `Hide ${item.label.toLowerCase()}` : `Show ${item.label.toLowerCase()}`"
+        @click="emit('toggle-layer', item.key)">
+        <span class="map-legend__swatch" :style="item.swatch" aria-hidden="true" />
+        {{ item.label }}
+      </button>
+      <span v-if="options.length > 0 && props.layers.rec" class="map-legend__key">
+        <span
+          class="map-legend__swatch"
+          :style="{ background: 'white', border: `2px solid ${palette.accent}` }"
+          aria-hidden="true" />
+        Other options for stop {{ (props.openStep ?? 0) + 1 }}
+      </span>
+    </div>
   </div>
 </template>
 
@@ -288,57 +316,68 @@
     width: 100%;
   }
 
-  .map-layer-filter {
+  /* Bottom-left, clear of Google's logo; doubles as the layer switch. */
+  .map-legend {
     align-items: center;
-    background: rgba(var(--v-theme-surface), 0.9);
-    backdrop-filter: blur(10px);
+    background: rgb(var(--v-theme-surface));
     border: 1px solid rgba(var(--v-border-color), 0.22);
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    bottom: 32px;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 8px;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+    left: 12px;
+    max-width: calc(100% - 24px);
+    padding: 4px;
     position: absolute;
-    right: 24px;
-    /* Position above the ChatPanel (which starts at bottom: 24px and has a header) */
-    bottom: 104px;
-    width: auto;
-    z-index: 1000;
+    z-index: 5;
   }
 
-  .map-layer-filter__title {
-    color: rgb(var(--v-theme-primary));
-    font-size: 0.6rem;
-    font-weight: 900;
-    letter-spacing: 0.5px;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
+  .map-legend__item,
+  .map-legend__key {
+    align-items: center;
+    border-radius: 6px;
+    color: rgb(var(--v-theme-on-surface));
+    display: inline-flex;
+    font-size: 0.8rem;
+    gap: 6px;
+    padding: 4px 8px;
   }
 
-  .map-layer-filter__controls {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  .map-legend__item {
+    background: none;
+    border: 0;
+    cursor: pointer;
   }
 
-  .map-layer-filter__button {
-    border-radius: 8px !important;
+  .map-legend__item:hover {
+    background: rgba(var(--v-theme-on-surface), 0.06);
   }
 
-  @media (max-width: 700px) {
-    .map-layer-filter {
-      bottom: 74px;
-      left: 12px;
-      max-width: calc(100% - 24px);
-      transform: none;
-      width: auto;
-    }
+  .map-legend__item:focus-visible {
+    outline: 2px solid rgb(var(--v-theme-primary));
+    outline-offset: -2px;
+  }
 
-    .map-layer-filter__controls {
-      grid-template-columns: 1fr;
-    }
+  .map-legend__item--off {
+    color: rgba(var(--v-theme-on-surface), 0.5);
+    text-decoration: line-through;
+  }
+
+  .map-legend__item--off .map-legend__swatch {
+    opacity: 0.35;
+  }
+
+  .map-legend__key {
+    color: rgba(var(--v-theme-on-surface), 0.72);
+  }
+
+  .map-legend__swatch {
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: inline-block;
+    height: 12px;
+    width: 12px;
   }
 </style>

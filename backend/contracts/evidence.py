@@ -24,7 +24,7 @@ from .intent import Intent, SteeringControls, TravelMode
 EVIDENCE_SCHEMA_VERSION = "evidence/1"
 _TOLERANCE = 1e-6
 
-SignalName = Literal["habit", "intent", "geo", "novelty", "semantic_history"]
+SignalName = Literal["habit", "intent", "geo", "novelty", "semantic_history", "travel", "repeat"]
 CandidateSource = Literal["sbr", "spatial", "sbr+spatial", "intent"]
 StageName = Literal[
     "intent_parse",
@@ -58,6 +58,9 @@ class Signal(_Contract):
     habit: normalized SBR score. geo: 1 / (1 + km) from the spatial stage.
     semantic_history: similarity to the user's history profile.
     intent: similarity to the stated intent. novelty: distance from history categories.
+    travel and repeat are route costs with negative values: travel is minus the hop
+    length over the route's distance scale, repeat is -1 for a category already in
+    the route.
     """
 
     raw: float | None = Field(
@@ -109,6 +112,13 @@ class IntentMatch(_Contract):
     )
     similarity: float | None = Field(default=None, ge=-1, le=1)
     within_budget: bool = True
+    in_range: int | None = Field(
+        default=None,
+        ge=0,
+        description="POIs of the wanted types within search_radius_km of the previous stop "
+        "at this step; 0 means the data has none to offer there.",
+    )
+    search_radius_km: float | None = Field(default=None, gt=0)
 
 
 class HistoryRelation(_Contract):

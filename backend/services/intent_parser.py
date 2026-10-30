@@ -1,24 +1,25 @@
 """Turn a natural-language request into an Intent and derive the ranking weights.
 
-Gemini parses the request into a ParsedIntent whose category hints must come
-from the dataset's vocabulary. When Gemini is unavailable or returns invalid
-output, a keyword parser takes over, so the demo keeps working offline. Either
-way, the resolver keeps only categories that exist in the POI data.
+Claude parses the request into a ParsedIntent (structured output) whose
+category hints must come from the dataset's vocabulary. When Claude is
+unavailable, refuses, or returns invalid output, a keyword parser takes over,
+so the demo keeps working offline. Either way, the resolver keeps only
+categories that exist in the POI data.
 """
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
-import os
 import re
 import threading
 import time
 from pathlib import Path
 from typing import Any, Literal
 
-from google import genai
-from google.genai import types
+import anthropic
+from pydantic import ValidationError
 
 from contracts.intent import (
     CategoryMatch,
@@ -107,6 +108,37 @@ class CategoryVocabulary:
                 scored.append((-hits, len(name), name))
         return [name for _, _, name in sorted(scored)][:MAX_MATCHES_PER_PHRASE]
 
+    def named(self, phrase: str) -> list[str]:
+        """Categories whose whole name appears in the phrase, such as "AT&T" or "H&M",
+        whose words are too short to match one by one."""
+
+        text = phrase.casefold()
+        found = []
+        for name in self.names:
+            key = name.strip().casefold()
+            if re.search(rf"(?<![\w&]){re.escape(key)}(?![\w&])", text):
+                found.append(name)
+        return found
+
+    def corrected(self, phrase: str) -> str:
+        """The phrase with each unknown word replaced by the closest category word, so a
+        typo such as "musuem" still finds "Museum"."""
+
+        known = {word for words in self._words.values() for word in words}
+        words = []
+        for word in content_words(phrase):
+            if not any(words_match(word, other) for other in known):
+                close = difflib.get_close_matches(word, known, n=1, cutoff=0.8)
+                word = close[0] if close else word
+            words.append(word)
+        return " ".join(words)
+
+    def hints(self, phrase: str) -> list[str]:
+        """Categories for a phrase: whole names first, then shared words, then typo fixes."""
+
+        hints = list(dict.fromkeys(self.named(phrase) + self.lexical(phrase)))
+        return hints or self.lexical(self.corrected(phrase))
+
 
 class IntentParser:
     def __init__(self, config: RecommendationConfig, client: Any | None = None):
@@ -127,13 +159,15 @@ class IntentParser:
     def parse(self, query: str) -> Intent:
         vocabulary = self.vocabulary()
         start = time.perf_counter()
-        parsed = self._parse_with_llm(query, vocabulary)
+        result = self._parse_with_llm(query, vocabulary)
         source: Literal["llm", "keyword"] = "llm"
-        if parsed is None:
-            parsed = parse_with_keywords(query, vocabulary)
+        if result is None:
+            parsed, model = parse_with_keywords(query, vocabulary), "keyword"
             source = "keyword"
+        else:
+            parsed, model = result
         trace = ParserTrace(
-            model=self.config.intent_model if source == "llm" else "keyword",
+            model=model,
             latency_ms=(time.perf_counter() - start) * 1000.0,
             fallback=source != "llm",
         )
@@ -141,36 +175,68 @@ class IntentParser:
             parsed, query=query, vocabulary=vocabulary, source=source, parser=trace
         )
 
-    def _parse_with_llm(self, query: str, vocabulary: CategoryVocabulary) -> ParsedIntent | None:
+    def _parse_with_llm(
+        self, query: str, vocabulary: CategoryVocabulary
+    ) -> tuple[ParsedIntent, str] | None:
+        """Return the parsed intent and the model that served it, or None to fall back."""
+
         client = self._get_client()
         if client is None:
-            logger.info("GEMINI_API_KEY is not set; using the keyword intent parser.")
             return None
         try:
-            response = client.models.generate_content(
+            response = client.beta.messages.parse(
                 model=self.config.intent_model,
-                contents=f"Request: {query}",
-                config=types.GenerateContentConfig(
-                    system_instruction=_SYSTEM_PROMPT + "\n".join(vocabulary.names),
-                    response_mime_type="application/json",
-                    response_json_schema=ParsedIntent.model_json_schema(),
-                    temperature=0.0,
-                    # Flash models only: skip thinking to keep parsing interactive.
-                    thinking_config=types.ThinkingConfig(thinking_budget=0),
-                ),
+                max_tokens=8000,
+                system=[
+                    {
+                        "type": "text",
+                        "text": _SYSTEM_PROMPT + "\n".join(vocabulary.names),
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+                messages=[{"role": "user", "content": f"Request: {query}"}],
+                output_format=ParsedIntent,
+                # A short extraction: low effort keeps parsing interactive at the booth.
+                output_config={"effort": "low"},
+                # If a safety classifier declines, the API retries on a fallback model.
+                betas=["server-side-fallback-2026-07-01"],
+                fallbacks="default",
             )
-            return ParsedIntent.model_validate_json(response.text or "")
-        except Exception as exc:
-            logger.warning("LLM intent parsing failed; using the keyword parser: %s", exc)
+        except anthropic.RateLimitError:
+            logger.warning("Claude rate limit reached; using the keyword intent parser.")
             return None
+        except anthropic.APIStatusError as exc:
+            logger.warning(
+                "Claude returned HTTP %s; using the keyword intent parser: %s",
+                exc.status_code,
+                exc.message,
+            )
+            return None
+        except (anthropic.AnthropicError, ValidationError) as exc:
+            logger.warning("Claude intent parsing failed; using the keyword intent parser: %s", exc)
+            return None
+        if response.stop_reason == "refusal" or response.parsed_output is None:
+            logger.warning(
+                "Claude returned no intent (stop_reason=%s); using the keyword intent parser.",
+                response.stop_reason,
+            )
+            return None
+        return response.parsed_output, response.model
 
     def _get_client(self) -> Any | None:
         if self._client is None:
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
+            # Credentials come from ANTHROPIC_API_KEY or an `ant auth login` profile. Without
+            # any, the SDK only fails at request time, so check before the first call.
+            client = anthropic.Anthropic()
+            if not has_credentials(client):
+                logger.info("No Claude credentials found; using the keyword intent parser.")
                 return None
-            self._client = genai.Client(api_key=api_key)
+            self._client = client
         return self._client
+
+
+def has_credentials(client: anthropic.Anthropic) -> bool:
+    return bool(client.api_key or client.auth_token or getattr(client, "credentials", None))
 
 
 def resolve_intent(
@@ -226,39 +292,52 @@ def controls_for(intent: Intent | None, config: RecommendationConfig) -> Steerin
 
 
 def parse_with_keywords(query: str, vocabulary: CategoryVocabulary) -> ParsedIntent:
-    """Offline fallback for English requests: category words, negations, numbers."""
+    """Offline fallback for English requests: category words, negations, numbers.
 
-    text = query.casefold()
+    A part of the request that names no category is passed on as unresolved, so the
+    interface can say what it could not match instead of dropping it silently.
+    """
+
+    text = query.casefold().replace("’", "'")
+    distance = _DISTANCE.search(text)
+    # Travel and distance phrases are not place types ("by subway", "under 1 km").
+    words_only = _CONSTRAINT_PHRASES.sub(" ", text)
     want: list[IntentPhrase] = []
     avoid: list[IntentPhrase] = []
-    for clause in re.split(r"[,.;!?]+|\band\b|\bthen\b", text):
+    for clause in re.split(r"[,.;!?]+|\band\b|\bthen\b", words_only):
         clause = clause.strip()
         if not clause:
             continue
-        negation = r"\b(?:no|not|nothing|avoid|without|except|skip)\s+([^,.;!?]+)"
-        for match in re.finditer(negation, clause):
-            phrase = " ".join(match.group(1).split()[:4])
+        for match in _NEGATION.finditer(clause):
+            rest = match.group(1).split()
             clause = clause.replace(match.group(0), " ")
-            hints = vocabulary.lexical(phrase)
-            if hints:  # "not been there" is not a category to avoid
-                avoid.append(IntentPhrase(phrase=phrase, category_hints=hints))
-        hints = vocabulary.lexical(clause)
+            # "not in the mood for a bar": look past the first words when they name nothing.
+            for phrase in (" ".join(rest[:4]), " ".join(rest[:8])):
+                hints = vocabulary.hints(phrase)
+                if hints:  # "not been there" is not a category to avoid
+                    avoid.append(IntentPhrase(phrase=phrase, category_hints=hints))
+                    break
+        clause = " ".join(clause.split())
+        hints = vocabulary.hints(clause)
         if hints:
-            want.append(IntentPhrase(phrase=" ".join(clause.split()), category_hints=hints))
+            want.append(IntentPhrase(phrase=clause, category_hints=hints))
+        elif content_words(clause) or re.search(r"[^\x00-\x7f]", clause):
+            want.append(IntentPhrase(phrase=clause, category_hints=[]))
 
     travel_mode = None
     max_hop_km = None
-    if re.search(r"\bwalk(?:ing|able)?\b", text):
+    if re.search(r"\b(?:walk(?:ing|able)?|on foot)\b", text):
         travel_mode = "walk"
         if "walking distance" in text:
             max_hop_km = WALKING_DISTANCE_KM
     elif re.search(r"\b(?:drive|driving|car)\b", text):
         travel_mode = "drive"
-    elif re.search(r"\b(?:transit|bus|metro|by train)\b", text):
+    elif re.search(r"\b(?:transit|bus|metro|by train|by subway)\b", text):
         travel_mode = "transit"
-    distance = re.search(r"\bwithin\s+(\d+(?:\.\d+)?)\s*(km|kilomet\w*|miles?|mi)\b", text)
     if distance:
-        max_hop_km = float(distance.group(1)) * (1.609 if distance.group(2).startswith("mi") else 1)
+        value, unit = float(distance.group(1)), distance.group(2)
+        km_per_unit = 1.609 if unit.startswith("mi") else 0.001 if unit[0] == "m" else 1.0
+        max_hop_km = value * km_per_unit
 
     return ParsedIntent(
         want=want,
@@ -312,6 +391,16 @@ def _explore(text: str) -> Literal["familiar", "balanced", "new"] | None:
 
 
 _NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+# Longer triggers first, so "not in the mood for" is not read as "not" + "in the mood".
+_NEGATION = re.compile(
+    r"\b(?:not in the mood for|anything but|don't want|do not want|don't|do not|no|not|"
+    r"nothing|avoid|without|except|skip)\s+([^,.;!?]+)"
+)
+_DISTANCE = re.compile(
+    r"\b(?:within|under|less than)\s+(\d+(?:\.\d+)?)\s*"
+    r"(km|kilomet(?:er|re)s?|miles?|mi|m|met(?:er|re)s?)\b(?:\s+away)?"
+)
+_CONSTRAINT_PHRASES = re.compile(rf"\bon foot\b|\bby subway\b|{_DISTANCE.pattern}")
 
 
 def _num_stops(text: str) -> int | None:

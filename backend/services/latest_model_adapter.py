@@ -150,6 +150,35 @@ class LatestSBRModel:
         self.raw2item: dict[int, int] = {}
         self.item2raw: dict[int, int] = {}
 
+    def score(self, raw_poi_ids: list[int], candidate_raw_ids: list[int]) -> dict[int, float]:
+        """The model's score for each candidate after this session, the same number predict
+        ranks by; candidates the model does not know are left out."""
+
+        self._ensure_loaded()
+        assert self._infer_sbr is not None
+        assert self._model is not None
+        assert self._opt is not None
+        assert self._device is not None
+
+        item_ids = self.raw_ids_to_item_ids(raw_poi_ids)
+        if not item_ids:
+            return {}
+        max_len = int(getattr(self._opt, "len_session", self.config.len_session))
+        item_ids = item_ids[-max_len:]
+        batch = self._infer_sbr.build_single_sample(session=item_ids, max_len=max_len)
+        batch = self._infer_sbr.move_batch_to_device(batch, self._device)
+        torch = importlib.import_module("torch")
+        with torch.no_grad():
+            _, scores = self._model(batch)
+        row = scores[0]
+        result: dict[int, float] = {}
+        for raw_id in candidate_raw_ids:
+            item_id = self.raw2item.get(int(raw_id))
+            # Score index 0 is internal item 1.
+            if item_id is not None and 0 < int(item_id) <= row.shape[0]:
+                result[int(raw_id)] = float(row[int(item_id) - 1])
+        return result
+
     def predict(self, raw_poi_ids: list[int], top_k: int | None = None) -> list[dict[str, Any]]:
         self._ensure_loaded()
         assert self._infer_sbr is not None

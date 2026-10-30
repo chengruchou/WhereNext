@@ -1,11 +1,25 @@
 import os
 
+import anthropic
+from contracts.evidence import RouteEvidence
 from flask import Blueprint, jsonify, request
-from google import genai
+from pydantic import ValidationError
+from services import grounded_explainer
+from services.intent_parser import get_intent_parser, has_credentials
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+_client: anthropic.Anthropic | None = None
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api/chat")
+
+
+def _get_client() -> anthropic.Anthropic | None:
+    # Created on first use, so the backend starts without Claude credentials.
+    global _client
+    if _client is None:
+        client = anthropic.Anthropic()
+        if has_credentials(client):
+            _client = client
+    return _client
 
 
 @chat_bp.route("/explain", methods=["POST"])
@@ -66,8 +80,28 @@ def explain():
     ...
     """
 
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    full_text = response.text
+    client = _get_client()
+    if client is None:
+        return jsonify("Explanations need Claude API credentials (ANTHROPIC_API_KEY)."), 503
+    try:
+        response = client.beta.messages.create(
+            model=os.getenv("WHERENEXT_EXPLAIN_MODEL", "claude-opus-5-5"),
+            max_tokens=16000,
+            output_config={"effort": "low"},
+            # If a safety classifier declines, the API retries on a fallback model.
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except anthropic.RateLimitError:
+        return jsonify("The explanation service is busy. Try again in a moment."), 503
+    except anthropic.APIStatusError as exc:
+        return jsonify(f"The explanation request failed (HTTP {exc.status_code})."), 502
+    except anthropic.AnthropicError:
+        return jsonify("Explanations need Claude API credentials and a network connection."), 503
+    if response.stop_reason == "refusal":
+        return jsonify("No explanation was generated for this route.")
+    full_text = "".join(block.text for block in response.content if block.type == "text")
 
     # # 以 "Overall Route Summary" 為界，拆成「逐點 top-1 原因」與「整體路徑摘要」
     # marker = "Overall Route Summary"
@@ -115,3 +149,43 @@ def explain():
     # print(full_text)
 
     return jsonify(full_text)
+
+
+@chat_bp.route("/grounded", methods=["POST"])
+def grounded():
+    """Explain a route from its evidence; every sentence is checked against what it cites."""
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        evidence = RouteEvidence.model_validate(payload.get("evidence"))
+    except ValidationError as exc:
+        return jsonify({"error": f"invalid evidence: {exc.errors()[0]['msg']}"}), 400
+    if not evidence.steps:
+        return jsonify("Get next POIs first.")
+
+    client = _get_client()
+    if client is None:
+        return jsonify("Explanations need Claude API credentials (ANTHROPIC_API_KEY)."), 503
+    evidence_json = grounded_explainer.evidence_for_prompt(evidence)
+    try:
+        response = grounded_explainer.request_explanation(client, evidence_json)
+    except anthropic.RateLimitError:
+        return jsonify("The explanation service is busy. Try again in a moment."), 503
+    except anthropic.APIStatusError as exc:
+        return jsonify(f"The explanation request failed (HTTP {exc.status_code})."), 502
+    except (anthropic.AnthropicError, ValidationError):
+        return jsonify("Explanations need Claude API credentials and a network connection."), 503
+    if response.stop_reason == "refusal" or response.parsed_output is None:
+        return jsonify("No explanation was generated for this route.")
+
+    categories = get_intent_parser().vocabulary().names
+    verified, markdown = grounded_explainer.explain(
+        response.parsed_output, evidence_json, categories
+    )
+    return jsonify(
+        {
+            "markdown": markdown,
+            "explanation": verified.model_dump(mode="json"),
+            "model": response.model,
+        }
+    )

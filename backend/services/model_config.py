@@ -43,6 +43,11 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_choice(name: str, choices: tuple[str, ...], default: str) -> str:
+    value = os.getenv(name, default).strip().lower()
+    return value if value in choices else default
+
+
 @dataclass(frozen=True)
 class RecommendationConfig:
     model_repo: Path
@@ -72,8 +77,24 @@ class RecommendationConfig:
     explore_balanced: float
     explore_new: float
     intent_k: int
-    intent_radius_km: float
+    reach_walk_km: float
+    reach_transit_km: float
+    reach_drive_km: float
+    intent_filter: bool
+    intent_unmet_within_reach: bool
+    intent_habit_scoring: bool
+    intent_habit_normalization: str
     intent_encoder: str
+    route_repeat_penalty: float
+    route_travel_weight: float
+    route_travel_scale_km: float
+
+    def reach_km(self, travel_mode: str) -> float:
+        """How far the user can go for one stop with this travel mode."""
+        return {
+            "walk": self.reach_walk_km,
+            "transit": self.reach_transit_km,
+        }.get(travel_mode, self.reach_drive_km)
 
     @classmethod
     def from_env(cls) -> "RecommendationConfig":
@@ -123,17 +144,40 @@ class RecommendationConfig:
             semantic_mode=os.getenv("WHERENEXT_SEMANTIC_MODE", "single").strip().lower(),
             # Weights derived from a parsed intent: starting values, to be tuned with
             # the habit-intent sweep.
-            intent_model=os.getenv("WHERENEXT_INTENT_MODEL", "gemini-2.5-flash"),
+            intent_model=os.getenv("WHERENEXT_INTENT_MODEL", "claude-opus-5-5"),
             intent_lambda_soft=_env_float("WHERENEXT_INTENT_LAMBDA_SOFT", 0.5),
             intent_lambda_firm=_env_float("WHERENEXT_INTENT_LAMBDA_FIRM", 0.8),
             explore_balanced=_env_float("WHERENEXT_EXPLORE_BALANCED", 0.1),
             explore_new=_env_float("WHERENEXT_EXPLORE_NEW", 0.3),
             # POIs in the wanted categories added to the candidate pool, searched within
-            # max_hop_km when the intent sets it, else within this radius.
-            intent_k=max(0, _env_int("WHERENEXT_INTENT_K", 20)),
-            intent_radius_km=_env_float("WHERENEXT_INTENT_RADIUS_KM", 5.0),
+            # max_hop_km when the intent sets it, else within the reach of its travel mode.
+            intent_k=max(0, _env_int("WHERENEXT_INTENT_K", 100)),
+            reach_walk_km=_env_float("WHERENEXT_REACH_WALK_KM", 2.0),
+            reach_transit_km=_env_float("WHERENEXT_REACH_TRANSIT_KM", 15.0),
+            reach_drive_km=_env_float("WHERENEXT_REACH_DRIVE_KM", 40.0),
+            # Keep only the wanted types when any are within reach; off for the
+            # habit-intent sweep, where lambda alone moves the ranking.
+            intent_filter=_env_bool("WHERENEXT_INTENT_FILTER", True),
+            # When nothing of the wanted types is within reach, habit still ranks only places
+            # within reach (or the nearest few), so "on foot" never means a 10 km first leg.
+            intent_unmet_within_reach=_env_bool("WHERENEXT_UNMET_WITHIN_REACH", True),
+            # Score every kept place of the requested types with the sequence model, so habit
+            # ranks within the request; off reproduces habit only for its own top candidates.
+            intent_habit_scoring=_env_bool("WHERENEXT_INTENT_HABIT_SCORING", True),
+            # How the model's scores become habit values within the request: "minmax" spans
+            # 0 to 1, "relative" is exp(score - top score), "softmax" is the model's
+            # probability over the places; the last two stay flat when the model is unsure.
+            intent_habit_normalization=_env_choice(
+                "WHERENEXT_INTENT_HABIT_NORMALIZATION", ("minmax", "relative", "softmax"), "minmax"
+            ),
             # Sentence-transformers model for the graded intent signal; "lexical" skips it.
             intent_encoder=os.getenv(
                 "WHERENEXT_INTENT_ENCODER", "sentence-transformers/all-MiniLM-L6-v2"
             ),
+            # Route costs for /route: starting values; both 0 turns route planning off.
+            # The travel scale applies without an intent; with one, travel is scaled by
+            # its max_hop_km or the reach of its travel mode.
+            route_repeat_penalty=max(0.0, _env_float("WHERENEXT_ROUTE_REPEAT_PENALTY", 0.3)),
+            route_travel_weight=max(0.0, _env_float("WHERENEXT_ROUTE_TRAVEL_WEIGHT", 0.2)),
+            route_travel_scale_km=_env_float("WHERENEXT_ROUTE_TRAVEL_SCALE_KM", 2.0),
         )

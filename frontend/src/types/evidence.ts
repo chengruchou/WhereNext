@@ -1,8 +1,17 @@
 // Mirror of backend/contracts/evidence.py. Keep the two in sync.
 
 import type { Intent, SteeringControls, TravelMode } from './intent'
+import type { GowallaPlace } from './place'
 
-export type SignalName = 'habit' | 'intent' | 'geo' | 'novelty' | 'semantic_history'
+// travel and repeat are route costs: their values are <= 0
+export type SignalName =
+  | 'habit'
+  | 'intent'
+  | 'geo'
+  | 'novelty'
+  | 'semantic_history'
+  | 'travel'
+  | 'repeat'
 export type CandidateSource = 'sbr' | 'spatial' | 'sbr+spatial' | 'intent'
 export type StageName =
   | 'intent_parse'
@@ -52,6 +61,8 @@ export interface IntentMatch {
   matched_want: string[]
   similarity: number | null
   within_budget: boolean
+  in_range: number | null // wanted-type POIs within search_radius_km at this step; 0 = none in the data
+  search_radius_km: number | null
 }
 
 export interface HistoryRelation {
@@ -94,6 +105,12 @@ export interface RouteEvidence {
   controls: SteeringControls
   steps: EvidenceRecord[]
   stages: StageStatus[]
+}
+
+// Response of POST /api/model/route
+export interface RouteResponse {
+  rounds: GowallaPlace[][] // candidates per stop; rounds[i][0] is the chosen stop
+  evidence: RouteEvidence
 }
 
 export interface SignalGap {
@@ -139,4 +156,11 @@ export interface VerifiedExplanation {
   explanation: GroundedExplanation
   verdicts: SentenceVerdict[]
   verifier_version: string
+}
+
+// Response of POST /api/chat/grounded; failures come back as a plain message string
+export interface GroundedResponse {
+  markdown: string // supported and unverifiable sentences, with a check summary
+  explanation: VerifiedExplanation
+  model: string
 }

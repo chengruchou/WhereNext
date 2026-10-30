@@ -113,23 +113,28 @@ def step_signals(
     fallback_habit: dict[int, float],
     controls: SteeringControls,
 ) -> dict[str, Signal]:
-    """Base signals, scaled by (1 - lambda) and joined by intent and novelty if steered."""
+    """Base signals, scaled by (1 - lambda) and joined by intent and novelty if steered,
+    then by the travel and repeat costs if the route planner ranked the row."""
 
     signals = base_signals(row, config, fallback_habit)
-    if row.get("steer_score") is None:
-        return signals
-    keep = 1.0 - controls.habit_intent
-    steered = {
-        name: _signal(signal.raw, signal.value, signal.weight * keep)
-        for name, signal in signals.items()
-    }
-    if row.get("intent_value") is not None:
-        steered["intent"] = _signal(
-            row.get("intent_similarity"), row["intent_value"], controls.habit_intent
+    if row.get("steer_score") is not None:
+        keep = 1.0 - controls.habit_intent
+        signals = {
+            name: _signal(signal.raw, signal.value, signal.weight * keep)
+            for name, signal in signals.items()
+        }
+        if row.get("intent_value") is not None:
+            signals["intent"] = _signal(
+                row.get("intent_similarity"), row["intent_value"], controls.habit_intent
+            )
+        if row.get("novelty_value") is not None:
+            signals["novelty"] = _signal(None, row["novelty_value"], controls.explore)
+    if row.get("route_score") is not None:
+        signals["travel"] = _signal(
+            row.get("hop_km"), row["travel_value"], config.route_travel_weight
         )
-    if row.get("novelty_value") is not None:
-        steered["novelty"] = _signal(None, row["novelty_value"], controls.explore)
-    return steered
+        signals["repeat"] = _signal(None, row["repeat_value"], config.route_repeat_penalty)
+    return signals
 
 
 def base_signals(
@@ -167,7 +172,12 @@ def _signal(raw: float | None, value: float, weight: float) -> Signal:
 def _intent_match(row: dict[str, Any]) -> IntentMatch | None:
     if row.get("intent_matched") is None:
         return None
-    return IntentMatch(matched_want=row["intent_matched"], similarity=row.get("intent_similarity"))
+    return IntentMatch(
+        matched_want=row["intent_matched"],
+        similarity=row.get("intent_similarity"),
+        in_range=row.get("intent_in_range"),
+        search_radius_km=row.get("intent_radius_km"),
+    )
 
 
 def _semantic_applied(row: dict[str, Any]) -> bool:
@@ -179,7 +189,7 @@ def _semantic_applied(row: dict[str, Any]) -> bool:
 
 
 def _pipeline_score(row: dict[str, Any]) -> float | None:
-    for key in ("steer_score", "semantic_fusion_score", "spatial_fusion_score"):
+    for key in ("route_score", "steer_score", "semantic_fusion_score", "spatial_fusion_score"):
         if row.get(key) is not None:
             return float(row[key])
     return None

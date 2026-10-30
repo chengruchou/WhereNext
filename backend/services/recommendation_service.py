@@ -19,6 +19,7 @@ from services.latest_model_adapter import (
     StageResult,
 )
 from services.model_config import RecommendationConfig
+from services.route_planner import plan_step, route_planning_enabled
 from services.steering import PoiIndex, needs_steering, steer
 
 
@@ -75,7 +76,11 @@ class RecommendationService:
         with_evidence: bool = True,
         intent: Intent | None = None,
         controls: SteeringControls | None = None,
+        route_stops: list[int] | None = None,
     ) -> StepResult:
+        """One ranking round. route_stops (stops already chosen in this route) turns on
+        the route planner; None leaves the ranking as steering produced it."""
+
         controls = controls or SteeringControls()
         histories = (
             UserHist.query.filter_by(user_id=int(user_id))
@@ -89,11 +94,50 @@ class RecommendationService:
             return StepResult()
 
         session = self._session_pois(session_raw_ids) if with_evidence else []
+        final_rows, stages, steering_ran = self.rank_session(
+            session_raw_ids, step=step, intent=intent, controls=controls, route_stops=route_stops
+        )
+        if not final_rows:
+            return StepResult(stages=stages, session=session)
+
+        ranked = self._hydrate_rows(final_rows)
+        if not with_evidence:
+            return StepResult(pois=[poi for _, poi in ranked], stages=stages)
+        records = build_step_records(
+            ranked,
+            step=step,
+            pool=final_rows,
+            session=session,
+            config=self.config,
+            controls=controls if steering_ran else None,
+            travel_mode=intent.travel_mode if intent else "drive",
+        )
+        return StepResult(
+            pois=[poi for _, poi in ranked],
+            records=records,
+            stages=stages,
+            session=session,
+        )
+
+    def rank_session(
+        self,
+        session_raw_ids: list[int],
+        *,
+        step: int = 1,
+        intent: Intent | None = None,
+        controls: SteeringControls | None = None,
+        route_stops: list[int] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[StageStatus], bool]:
+        """Rank candidates for a session given as raw POI IDs, with no database access, so
+        offline evaluation runs the same stages as the app. Returns the ranked rows, the
+        stage statuses, and whether steering ran."""
+
+        controls = controls or SteeringControls()
         start = time.perf_counter()
         sbr_rows = self.sbr_model.predict(session_raw_ids, top_k=self.config.model_top_k)
         stages = [StageStatus(stage="sbr", step=step, status="ran", latency_ms=_elapsed_ms(start))]
         if not sbr_rows:
-            return StepResult(stages=stages, session=session)
+            return [], stages, False
 
         spatial_rows, spatial_status = self._run_stage(
             "spatial", step, lambda: self._spatial().rerank(session_raw_ids, sbr_rows)
@@ -117,25 +161,22 @@ class RecommendationService:
             ),
         )
         stages.append(status)
+        steering_ran = steered and status.status == "ran"
 
-        ranked = self._hydrate_rows(final_rows)
-        if not with_evidence:
-            return StepResult(pois=[poi for _, poi in ranked], stages=stages)
-        records = build_step_records(
-            ranked,
-            step=step,
-            pool=final_rows,
-            session=session,
-            config=self.config,
-            controls=controls if steered and status.status == "ran" else None,
-            travel_mode=intent.travel_mode if intent else "drive",
-        )
-        return StepResult(
-            pois=[poi for _, poi in ranked],
-            records=records,
-            stages=stages,
-            session=session,
-        )
+        if route_stops is not None:
+            final_rows, status = self._run_stage(
+                "route_plan",
+                step,
+                lambda: self._plan(
+                    final_rows,
+                    route_stops=route_stops,
+                    session_raw_ids=session_raw_ids,
+                    intent=intent,
+                    controls=controls,
+                ),
+            )
+            stages.append(status)
+        return final_rows, stages, steering_ran
 
     def recommend_route(
         self,
@@ -145,17 +186,24 @@ class RecommendationService:
         intent: Intent | None = None,
         controls: SteeringControls | None = None,
     ) -> tuple[list[list[dict[str, Any]]], RouteEvidence]:
-        """Greedy route: each round appends the previous round's top POI and re-ranks."""
+        """Greedy route: each round re-ranks with the route so far, appends its top POI,
+        and runs again; the route planner adds travel and repeat costs."""
 
         controls = controls or SteeringControls()
         extra = list(append_back or [])
+        chosen: list[int] = []
         rounds: list[list[dict[str, Any]]] = []
         steps: list[EvidenceRecord] = []
         stages: list[StageStatus] = []
         history: list[dict[str, Any]] | None = None
         for step in range(1, num_stops + 1):
             result = self.recommend_step(
-                user_id, extra, step=step, intent=intent, controls=controls
+                user_id,
+                extra,
+                step=step,
+                intent=intent,
+                controls=controls,
+                route_stops=list(chosen),
             )
             stages.extend(result.stages)
             if history is None:
@@ -165,6 +213,7 @@ class RecommendationService:
             rounds.append(result.pois)
             steps.append(result.records[0])
             extra.append(result.pois[0]["raw_poi_id"])
+            chosen.append(int(result.pois[0]["raw_poi_id"]))
 
         evidence = RouteEvidence(
             request_id=uuid.uuid4().hex,
@@ -205,10 +254,47 @@ class RecommendationService:
                 spatial_ran=spatial_ran,
                 intent_scores=scorer.score(intent),
                 signal_method=scorer.method,
+                habit_scores=lambda raw_ids: self._habit_scores(session_raw_ids, raw_ids),
             )
             return steered, "ran", detail
         except Exception as exc:
             logger.warning("Intent steering failed: %s", exc)
+            return rows, "failed", str(exc)
+
+    def _habit_scores(self, session_raw_ids: list[int], raw_ids: list[int]) -> dict[int, float]:
+        # A failure here keeps the pipeline's habit values instead of failing the stage.
+        try:
+            return self.sbr_model.score(session_raw_ids, raw_ids)
+        except Exception as exc:
+            logger.warning("Habit scoring within the request failed: %s", exc)
+            return {}
+
+    def _plan(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        route_stops: list[int],
+        session_raw_ids: list[int],
+        intent: Intent | None,
+        controls: SteeringControls,
+    ) -> StageResult:
+        if not route_planning_enabled(self.config):
+            return rows, "skipped", "disabled"
+        if not rows:
+            return rows, "skipped", "no candidates"
+        try:
+            planned, detail = plan_step(
+                rows,
+                route_stops=route_stops,
+                session_ids=session_raw_ids,
+                index=self._poi_index(),
+                config=self.config,
+                intent=intent,
+                controls=controls,
+            )
+            return planned, "ran", detail
+        except Exception as exc:
+            logger.warning("Route planning failed: %s", exc)
             return rows, "failed", str(exc)
 
     def _poi_index(self) -> PoiIndex:
