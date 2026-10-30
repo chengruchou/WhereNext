@@ -37,6 +37,9 @@ from services.evidence_builder import base_signals, haversine_km, normalized_sbr
 from services.intent_signal import IntentScores
 from services.model_config import RecommendationConfig
 
+# Candidates habit may rank when a request cannot be met and none is within reach.
+UNMET_NEAREST = 5
+
 
 @dataclass(frozen=True)
 class PoiPoint:
@@ -192,6 +195,16 @@ def steer(
             off_request = len(kept) - len(wanted)
             kept = wanted
             filtered = True
+    # A request the data cannot meet here still sets how far the traveler will go: habit
+    # ranks the places within reach, or the nearest few when none are.
+    beyond_reach = 0
+    if (want and lam > 0 and config.intent_filter and config.intent_unmet_within_reach
+            and in_range == 0 and origin is not None and kept):
+        near = [row for row in kept if row.get("hop_km", 0.0) <= radius_km]
+        if not near:
+            near = sorted(kept, key=lambda row: row.get("hop_km", float("inf")))[:UNMET_NEAREST]
+        beyond_reach = len(kept) - len(near)
+        kept = near
     habit_scored = 0
     if filtered and habit_scores is not None and config.intent_habit_scoring:
         habit_scored = _score_within_request(kept, habit_scores, spatial_ran, config)
@@ -260,6 +273,8 @@ def steer(
         parts.append(f"habit scored for {habit_scored} places of the wanted types")
     if request_unmet and want and lam > 0:
         parts.append("request not met within reach; ranked by habit")
+    if beyond_reach:
+        parts.append(f"{beyond_reach} beyond {radius_km:g} km removed")
     if origin is None:
         parts.append("no origin coordinates; distance rules not applied")
     return kept, "; ".join(parts)

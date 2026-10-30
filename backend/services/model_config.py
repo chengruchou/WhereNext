@@ -81,6 +81,7 @@ class RecommendationConfig:
     reach_transit_km: float
     reach_drive_km: float
     intent_filter: bool
+    intent_unmet_within_reach: bool
     intent_habit_scoring: bool
     intent_habit_normalization: str
     intent_encoder: str
@@ -157,6 +158,9 @@ class RecommendationConfig:
             # Keep only the wanted types when any are within reach; off for the
             # habit-intent sweep, where lambda alone moves the ranking.
             intent_filter=_env_bool("WHERENEXT_INTENT_FILTER", True),
+            # When nothing of the wanted types is within reach, habit still ranks only places
+            # within reach (or the nearest few), so "on foot" never means a 10 km first leg.
+            intent_unmet_within_reach=_env_bool("WHERENEXT_UNMET_WITHIN_REACH", True),
             # Score every kept place of the requested types with the sequence model, so habit
             # ranks within the request; off reproduces habit only for its own top candidates.
             intent_habit_scoring=_env_bool("WHERENEXT_INTENT_HABIT_SCORING", True),
