@@ -218,7 +218,8 @@ def steer(
             if request_unmet:
                 value = 0.0
             row["intent_value"] = value
-            row["intent_similarity"] = raw
+            # Cosine similarity in float32 can land a hair outside [-1, 1].
+            row["intent_similarity"] = None if raw is None else max(-1.0, min(1.0, raw))
             score += lam * value
         if eps > 0:
             share = visits[row["category_name"]] / len(session_ids) if session_ids else 0.0
