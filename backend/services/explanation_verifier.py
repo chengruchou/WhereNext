@@ -19,6 +19,7 @@ unverifiable: nothing in it can be checked.
 
 from __future__ import annotations
 
+import functools
 import re
 from collections.abc import Iterator
 from typing import Any
@@ -32,7 +33,7 @@ from contracts.evidence import (
 )
 
 
-VERIFIER_VERSION = "verifier/2"
+VERIFIER_VERSION = "verifier/2.2"
 
 _ABSENT_ATTRIBUTES = re.compile(
     r"\b(rated|ratings?|stars?|reviews?|reviewed|prices?|priced|cheap|expensive|affordable|"
@@ -47,10 +48,22 @@ _COMPARISON = re.compile(
     r"lowest)\b",
     re.IGNORECASE,
 )
-_OFTEN = re.compile(r"\b(often|usually|regularly|frequently|always|favou?rite)\b", re.IGNORECASE)
+# A claim that the traveler goes to a type often: a frequency word with a visiting verb, or
+# "favourite". "The way you usually move" describes habit in general and is not read as one.
+_OFTEN = re.compile(
+    r"\b(?:often|usually|regularly|frequently|always)\s+(?:go|goes|went|visit|visits|visited|"
+    r"stop|stops|head|heads|choose|chooses|pick|picks|eat|drink)\b"
+    r"|\b(?:go|goes|went|visit|visits|visited)\b[^.;]{0,40}\b(?:often|regularly|a lot)\b"
+    r"|\bfavou?rite\b",
+    re.IGNORECASE,
+)
 _NEW = re.compile(
     r"\b(new to you|never|first time|have not been|haven't been|none of your)\b", re.IGNORECASE
 )
+# "You have not been to this place" is about the place itself, not its type.
+_THIS_PLACE = re.compile(r"\b(?:this|that) (?:place|spot|one)\b|\bhere\b", re.IGNORECASE)
+# Where a clause ends, so "often" and "new to you" are read with the types in their own clause.
+_CLAUSE_BREAK = re.compile(r"[,;:]|\b(?:and|but|then|so|while|which|where)\b", re.IGNORECASE)
 _NEGATION = re.compile(r"\b(?:not|no|never|isn't|aren't|wasn't)\s+(?:\w+\s+){0,2}$", re.IGNORECASE)
 # "It is a", "This stop is not a": what follows is said to be the stop itself.
 _IDENTITY = re.compile(
@@ -81,8 +94,9 @@ _UNITS: dict[str, tuple[tuple[str, ...] | None, float]] = {
     **dict.fromkeys(("check-in", "check-ins"), (("checkins_count",), 1.0)),
     # The only share the data has: visits of the stop's type over the history window.
     "%": (("visit_share",), 100.0),
-    "": (("same_category_visits", "history_window", "in_range", "num_stops", "pool_size",
-          "steps_since_category", "checkins_count", "users_count", "photos_count"), 1.0),
+    "": (("stop_count", "same_category_visits", "history_window", "in_range", "num_stops",
+          "pool_size", "steps_since_category", "checkins_count", "users_count", "photos_count"),
+         1.0),
 }
 _COUNT_UNITS = ("", "times", "visit", "visits", "check-in", "check-ins")
 
@@ -140,6 +154,8 @@ def verify_sentence(
     found = dict(numbers)
     if found.get("history_window") and "same_category_visits" in found:
         numbers.append(("visit_share", found["same_category_visits"] / found["history_window"]))
+    # How many stops the route has is a fact of the evidence without a field ("three museums").
+    numbers.append(("stop_count", float(len(evidence.get("steps") or []))))
 
     text = sentence.text
     named, rest = _named_categories(text, category_names)
@@ -174,8 +190,7 @@ def verify_sentence(
                 )
         checked = True
 
-    # How often the traveler went to each named type, or to this stop's type if none is named;
-    # for the stop's own type, the visits its record counts.
+    # How often the traveler went to a type; for the stop's own type, the visits its record counts.
     own_visits = ((own or {}).get("history") or {}).get("same_category_visits")
 
     def visits(name: str) -> int:
@@ -183,17 +198,45 @@ def verify_sentence(
             return own_visits
         return history.count(name.casefold())
 
-    counts = [visits(name) for name, _, _ in named] or ([visits(own_type)] if own_type else [])
+    # "Often" and "new to you" are read with the types named in their own clause. Without one,
+    # "new to you" is about this stop's type (or, in the summary, every stop's), and "often" is
+    # about habit in general, which the evidence does not count.
     for pattern, holds, claim in ((_OFTEN, lambda c: c >= 2, "you often go there"),
                                   (_NEW, lambda c: c == 0, "it is new to you")):
-        found = pattern.search(text)
-        if found and counts:
+        for found in pattern.finditer(text):
+            clause = _clause(text, found.start(), found.end())
+            if pattern is _NEW and _THIS_PLACE.search(clause):
+                if own is not None:
+                    if (own.get("history") or {}).get("visited_this_poi"):
+                        return verdict("unsupported", "says you have not been here, but you have")
+                    checked = True
+                continue
+            in_clause = [name for name, _, _ in named if _name_pattern(name).search(clause)]
+            if in_clause:
+                counts = [visits(name) for name in in_clause]
+            elif pattern is _NEW and own_type:
+                counts = [visits(own_type)]
+            elif pattern is _NEW and own is None and steps:
+                counts = [max((s.get("history") or {}).get("same_category_visits", 0)
+                              for s in steps)]
+            else:
+                continue
             if not any(holds(c) for c in counts):
                 return verdict(
                     "unsupported", f'says "{found.group(0)}", but the history does not show '
                     f"that {claim}"
                 )
             checked = True
+
+    # Counts of stops: all of them, those after the first, or those of a named type.
+    route_types_on_stops = [((s.get("poi") or {}).get("category_name") or "").strip().casefold()
+                            for s in steps]
+    if len(steps) > 1:
+        numbers.append(("stop_count", float(len(steps) - 1)))
+    for name, _, _ in named:
+        of_type = route_types_on_stops.count(name.casefold())
+        if of_type:
+            numbers.append(("stop_count", float(of_type)))
 
     rest = _STEP_LABEL.sub(" ", rest)
     claims = [(m.group(1), (m.group(2) or "").casefold()) for m in _NUMBER.finditer(rest)]
@@ -262,6 +305,20 @@ def _number_supported(token: str, unit: str, cited: list[tuple[str, float]]) -> 
     return False
 
 
+@functools.lru_cache(maxsize=4096)
+def _name_pattern(name: str) -> re.Pattern[str]:
+    flags = re.IGNORECASE if " " in name else 0
+    return re.compile(rf"(?<![\w]){re.escape(name)}(?:e?s)?(?![\w])", flags)
+
+
+def _clause(text: str, start: int, end: int) -> str:
+    """The part of the sentence around text[start:end] between clause breaks."""
+
+    before = [m.end() for m in _CLAUSE_BREAK.finditer(text, 0, start)]
+    after = _CLAUSE_BREAK.search(text, end)
+    return text[(before[-1] if before else 0) : (after.start() if after else len(text))]
+
+
 def _named_categories(
     text: str, category_names: list[str]
 ) -> tuple[list[tuple[str, bool, bool]], str]:
@@ -273,8 +330,7 @@ def _named_categories(
     remaining = text
     found = []
     for name in category_names:
-        flags = re.IGNORECASE if " " in name else 0
-        pattern = re.compile(rf"(?<![\w]){re.escape(name)}(?:e?s)?(?![\w])", flags)
+        pattern = _name_pattern(name)
         match = pattern.search(remaining)
         if match:
             before = remaining[: match.start()]

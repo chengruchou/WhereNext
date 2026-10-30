@@ -173,3 +173,13 @@ Remaining misses and limits:
   outside them pass, and "best" in "best matches your request" would be removed.
 - All of this is on templated sentences; what share of Claude's real sentences each rule
   affects is for E-D.
+
+## Rerun with verifier/2.1 (2026-10-30)
+
+Two rules changed after E-D's five-call trial showed true Claude sentences being removed (see
+E-D): a stop count may match the route's number of stops, and a frequency claim needs a visiting
+verb. Rerun on the same seeds; the routes differ slightly from the first run because E-G2 has
+since kept unmet requests within reach, so the sentence counts differ a little. Held-out routes:
+all 14 kinds of error caught in at least 99.6% of sentences (M8 miles 99.6%, the rest 100%), and
+no T, P1 to P5, P7 or P8 sentence removed; P6 (an uncited window) is still removed, as designed.
+The development routes give the same picture.

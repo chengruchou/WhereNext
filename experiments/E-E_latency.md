@@ -59,3 +59,18 @@ Against the predictions:
 
 Not covered yet: reading the request with Claude, writing the explanation with Claude, and
 Google road routes. These call external services and are timed separately with the authors' keys.
+
+## External services (run 2026-10-30)
+
+Timed during the E-A2 and E-D batch (`experiments/claude_runs.py --mode batch`), one call at a
+time, from the authors' machine in Taiwan:
+
+| Call | Calls | p50 | p95 |
+|---|---|---|---|
+| Claude reads a request (claude-opus-5-5, effort low) | 207 | 1.7 s | 2.7 s |
+| Claude writes a route's explanation (effort medium) | 54 | 5.2 s | 7.3 s |
+| Google Routes API, one leg (the 150 legs of E-D's routes) | 150 | 0.08 s | 0.12 s |
+
+No call failed; every leg returned a road route. A request at the booth therefore takes about
+2 s to read, the route under 0.2 s on the CPU, and the explanation about 5 s more, which the
+interface shows after the route.
