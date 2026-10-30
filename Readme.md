@@ -1,9 +1,9 @@
 # WhereNext: Interactive Semantic-Spatial POI Exploration
 
 WhereNext is a runnable full-stack demo system for interactive Point-of-Interest (POI) exploration.
-It turns next-POI recommendation from a static top-K ranking task into an editable, explainable, and map-based urban exploration workflow.
+A traveler states a request in their own words ("a museum, nothing with coffee"), and a session-based next-POI recommender plans a route around it: places of the requested types within reach decide each stop, and the traveler's habits rank among them. Each stop carries an evidence record whose parts add up to its score; an LLM writes the explanation from that record alone, and a verifier checks every sentence against it and removes the ones it finds unsupported.
 
-Users can load or edit a POI trajectory, search and add POIs, request short-horizon next-POI recommendations, inspect recommended destinations on a Google Map, visualize planned routes, and view LLM-generated route-level explanations.
+Users can load or edit a POI trajectory, type a request, plan a multi-stop route, inspect each stop's evidence on a Google Map, and read checked, route-level explanations.
 
 > This repository contains the runnable demo system.
 > It is not the full offline training or benchmark evaluation repository.
@@ -12,14 +12,13 @@ Users can load or edit a POI trajectory, search and add POIs, request short-hori
 
 ## Features
 
-* Load user trajectories by user ID.
-* Display observed POI visits on a map.
-* Search POIs by raw POI ID or category.
-* Add or remove POIs from the current trajectory.
-* Request short-horizon next-POI recommendations.
-* Display recommendation cards and map markers.
-* Visualize routes using the Google Maps API.
-* Generate route-level explanations with an LLM.
+* Load user trajectories by user ID, or pick a demo traveler.
+* Display observed POI visits on a map; search POIs and add or remove them.
+* Read a free-text request into dataset place types, travel mode, distance and wording (Claude, with a keyword parser as the offline fallback).
+* Plan a request-first route: the request decides each stop when it can be met within reach, habit ranks among the fitting places, and travel and repetition costs shape the route.
+* Show each stop's score parts and other options ("Why this stop"), and an Inspector view with weights and stage timings.
+* Draw road routes with the Google Routes API.
+* Write route explanations whose sentences cite the evidence, and remove sentences a rule-based verifier finds unsupported.
 * Apply semantic-spatial reranking on top of a deployed SBR backbone.
 
 ---
@@ -74,15 +73,27 @@ WhereNext/
 │   │   ├── model_api.py               # Recommendation API
 │   │   ├── route_api.py               # Google Routes API proxy
 │   │   └── chat_api_multi.py          # LLM route explanation API
+│   ├── contracts/                     # Pydantic schemas: Intent, RouteEvidence, explanations
 │   ├── services/
 │   │   ├── recommendation_service.py  # Request-level recommendation pipeline
 │   │   ├── model_config.py            # Model and artifact configuration
-│   │   └── latest_model_adapter.py    # MG-DSGAT adapter and reranking logic
+│   │   ├── latest_model_adapter.py    # MG-DSGAT adapter and reranking logic
+│   │   ├── intent_parser.py           # Claude request parser and keyword fallback
+│   │   ├── intent_signal.py           # Graded relevance of each place to the request
+│   │   ├── steering.py                # Request-first filter and habit within the request
+│   │   ├── route_planner.py           # Travel and repeat costs per stop
+│   │   ├── evidence_builder.py        # Per-stop evidence records
+│   │   ├── grounded_explainer.py      # Claude explanations from the evidence
+│   │   ├── explanation_verifier.py    # Checks every sentence against what it cites
+│   │   └── visit_store.py             # Visit storage; demo travelers stay in memory
 │   ├── model_core/
 │   │   └── MG-DSGAT/                  # Deployed SBR backbone implementation
 │   ├── datasets/                      # POI metadata and mapping files
+│   ├── tests/                         # Unit tests (pytest)
 │   ├── pyproject.toml
 │   └── uv.lock
+│
+├── experiments/                      # Offline evaluations: design, predictions, results
 │
 └── README.md
 ```
@@ -161,7 +172,7 @@ Do not commit real `.env` files or API keys.
 
 ### Demo Travelers and Inspector
 
-The traveler step offers demo travelers (`frontend/src/demo.ts`), each with requests that show its case well. Picking one replaces the visits of its reserved user ID (900001 and 900002), so keep those IDs free for the demo. The **Inspector** button in the top bar shows score numbers, weights and pipeline timings; visitors see the bars and sentences without them. Add `?inspector=1` to the URL to open the app with the Inspector on.
+The traveler step offers demo travelers (`frontend/src/demo.ts`), each with requests that show its case well. Picking one replaces the visits of its reserved user ID (900001 and 900002). Visits of reserved IDs (900000 and up) are kept in the backend's memory only, so loading or editing a demo traveler writes nothing to the database, and a restart forgets it. At a booth, set `WHERENEXT_BOOTH=true` in `backend/.env`: edits to any other user are then refused, so nothing a visitor does reaches the database. The **Inspector** button in the top bar shows score numbers, weights and pipeline timings; visitors see the bars and sentences without them. Add `?inspector=1` to the URL to open the app with the Inspector on.
 
 ### Google Maps Setup
 
@@ -197,10 +208,10 @@ Clone the repository:
 
 ```bash
 git clone https://github.com/chengruchou/WhereNext.git
-cd POI_System
+cd WhereNext
 ```
 
-Install backend dependencies:
+Install backend dependencies (this includes PyTorch and `sentence-transformers`, which scores how well each place fits a request):
 
 ```bash
 cd backend
@@ -278,20 +289,52 @@ http://localhost:3000/
 
 ---
 
+## Run the Tests
+
+The backend unit tests cover the explanation verifier, the keyword parser, steering and visit storage. They need no model files or API keys:
+
+```bash
+cd backend
+uv run --with pytest python -m pytest tests
+```
+
+The frontend type check:
+
+```bash
+cd frontend
+npm run type-check
+```
+
+---
+
+## Experiments
+
+`experiments/` holds the offline evaluations. Each Markdown file is a design document: the question, the data, the metrics and the predictions, written before the run, followed by the results and which predictions held. Each script's docstring shows how to run it. They need the MG-DSGAT checkpoint, the semantic embeddings (set through the `WHERENEXT_*` variables) and the Gowalla test split, and call no external API.
+
+| ID | Question |
+|---|---|
+| E-B, E-B2 | Within a request, does habit find the place the user actually visited next better than nearest-first or popularity? |
+| E-C, E-C2 | Keep only the requested types, or weigh the request against habit? What if the request is not the answer? |
+| E-D1 | Does the verifier remove sentences with planted errors and keep true ones? |
+| E-A1 | How well does the keyword parser read requests with known answers? |
+| E-E | How long does each stage take on a CPU? |
+| E-F | Without a request, do reranking and route costs keep accuracy and reduce repetition? |
+| E-G, E-G2 | Do the wording-derived weights change routes? Where does an unmet request send the traveler? |
+| E-N | Does "somewhere new" change routes when no type is requested? |
+| E-R | Do E-B and E-F hold with intervals resampled over sessions? |
+
+---
+
 ## Demo Workflow
 
 A typical WhereNext demo follows this workflow:
 
-1. Enter a user ID and load the user trajectory.
-2. Inspect observed POI visits in the history panel.
-3. View the historical trajectory on the Google Map.
-4. Search POIs by ID or category.
-5. Add selected POIs to the current trajectory.
-6. Remove unwanted POIs if needed.
-7. Click **Get next POIs** to request recommendations.
-8. Inspect recommendation cards and map markers.
-9. View route visualization connecting the current trajectory and recommended destinations.
-10. Read the LLM-generated route-level explanation.
+1. Pick a demo traveler, or enter a user ID and load the user trajectory.
+2. Inspect the visits in the history panel and on the map; search, add or remove places if needed.
+3. Type a request, or pick an example. Its place types, travel mode and weights appear as chips that can be edited.
+4. Click **Plan route**. Each stop shows its checked sentence; "Why this stop" shows the score parts and the other options on the map.
+5. If nothing of the requested types is within reach, the panel says so and the stops follow the traveler's habits within reach.
+6. Turn on the **Inspector** to see score numbers, weights and stage timings.
 
 ---
 
@@ -299,7 +342,7 @@ A typical WhereNext demo follows this workflow:
 
 ### User History APIs
 
-Used for loading, adding, and deleting user visit histories.
+Used for loading, adding, and deleting user visit histories. Visits of the reserved demo IDs (900000 and up) are kept in memory, not in the database; with `WHERENEXT_BOOTH=true`, changes to other users return 403.
 
 ```text
 GET    /api/user/...
@@ -336,19 +379,20 @@ POST /api/model/route/<user_id>
 
 `/api/intent/parse` turns a request such as "museums, nothing with coffee" into an `Intent` whose place types exist in the POI data. `/api/model/route/<user_id>` plans every stop in one call and returns the candidates per stop with per-stop evidence: score parts, distance from the previous stop, and whether each pipeline stage ran.
 
-When places of the requested types are within reach of the previous stop, only those are kept, so the request decides each stop and the user's habits rank within it. Reach is the request's own distance limit, else it depends on the travel mode. When nothing of the requested types is within reach, the stops follow the user's habits and the evidence says so. Within the request, the sequence model scores every kept place, so each one carries the same habit and closeness signals.
+When places of the requested types are within reach of the previous stop, only those are kept, so the request decides each stop and the user's habits rank within it. Reach is the request's own distance limit, else it depends on the travel mode. When nothing of the requested types is within reach, the stops follow the user's habits among the places within reach (the five nearest if none is), and the evidence says so. Within the request, the sequence model scores every kept place, so each one carries the same habit and closeness signals.
 
 ```text
 WHERENEXT_REACH_WALK_KM=2
 WHERENEXT_REACH_TRANSIT_KM=15
 WHERENEXT_REACH_DRIVE_KM=40
 WHERENEXT_INTENT_FILTER=true                 # false ranks by the weighted score alone
+WHERENEXT_UNMET_WITHIN_REACH=true            # false: an unmet request lets habit pick from any distance
 WHERENEXT_INTENT_K=100                       # places of the requested types added per step
 WHERENEXT_INTENT_HABIT_SCORING=true          # false: habit only for the model's own top candidates
 WHERENEXT_INTENT_HABIT_NORMALIZATION=minmax  # or relative / softmax; see experiments/E-B2
 ```
 
-How well this ranking finds the place a user actually visited next, against nearest-first and most-visited baselines, is measured in `experiments/` (E-B and E-B2), with each experiment's predictions written before its run.
+How well this ranking finds the place a user actually visited next, against nearest-first and most-visited baselines, is measured in `experiments/` (E-B and E-B2); how the filter compares with weighting the request against habit, in E-C and E-C2.
 
 ### Route Planning API
 
@@ -369,7 +413,7 @@ POST /api/chat/grounded
 POST /api/chat/explain
 ```
 
-`/api/chat/grounded` takes a route's evidence and returns sentences that each cite the evidence values they rely on. Every sentence is checked against what it cites; sentences the data does not support are dropped, and the response says how many were checked. `/api/chat/explain` returns a free-text Markdown explanation built from the historical and recommended POIs.
+`/api/chat/grounded` takes a route's evidence and returns sentences that each cite the evidence values they rely on. Every sentence is checked against what it cites: each number must match a cited field of its kind (a distance in km, m or miles, a visit count) for the same stop, a stop may not be called a type it is not, "often" and "new to you" must agree with the visit counts, and attributes or comparisons the data cannot show (ratings, prices, popularity, "the closest") are not allowed. Sentences the data does not support are dropped, and the response says how many were checked, could not be checked, and were dropped. E-D1 in `experiments/` measures this on sentences with planted errors. `/api/chat/explain` returns a free-text Markdown explanation built from the historical and recommended POIs.
 
 ---
 
