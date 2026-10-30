@@ -1,11 +1,14 @@
 """E-D: export Claude's explanation sentences for the annotators, without the verdicts.
 
-Writes experiments/E-D_annotation/sentences.csv (what annotators see, in a shuffled order) and
+Writes experiments/<batch>_annotation/sentences.csv (what annotators see, in a shuffled order) and
 key.csv (the verifiers' verdicts, opened only after every annotator has labelled). Each row shows
 the whole route, so a sentence about another stop ("a longer drive", "from the Apple Store")
 can be judged from the row.
 
-    python experiments/ed_export_annotation.py experiments/results/claude_batch_2026-10-30.json
+    python experiments/ed_export_annotation.py <results.json> <batch>
+
+E-D2 comes from experiments/results/claude_validate_2026-10-30.json, E-D from
+experiments/results/claude_batch_2026-10-30.json.
 """
 
 from __future__ import annotations
@@ -29,7 +32,6 @@ from services.explanation_verifier import VERIFIER_VERSION, verify_explanation
 from services.intent_parser import CategoryVocabulary
 from services.model_config import RecommendationConfig
 
-OUT = Path(__file__).resolve().parent / "E-D_annotation"
 SIGNAL_NAMES = {"intent": "request", "habit": "habit", "novelty": "novelty"}
 
 
@@ -107,10 +109,12 @@ def verify_again(route: dict[str, Any], categories: list[str]) -> list[Any]:
 
 def main() -> None:
     data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+    batch = sys.argv[2]
+    out = Path(__file__).resolve().parent / f"{batch}_annotation"
     categories = CategoryVocabulary.from_metadata(
         RecommendationConfig.from_env().poi_metadata_path).names
     rows, key = [], []
-    for r, route in enumerate(data["E-D"], start=1):
+    for r, route in enumerate(data[batch], start=1):
         ev = route["evidence"]
         history = " → ".join(name(p) for p in ev["history"])
         now = verify_again(route, categories)
@@ -128,25 +132,27 @@ def main() -> None:
                 "route stops": route_text(ev, step, bool(route["intent"].get("want"))),
                 "sentence": s["text"], "cited values": " | ".join(cited),
             })
+            # The E-D batch saved verifier/2.1 as v2; E-D2 saved it as v2.1.
             key.append({VERIFIER_VERSION: v.verdict, f"{VERIFIER_VERSION} reason": v.reason or "",
-                        "verifier/2.1": s["v2"], "verifier/2.1 reason": s["v2_reason"] or "",
+                        "verifier/2.1": s.get("v2.1", s["v2"]),
+                        "verifier/2.1 reason": s.get("v2.1_reason", s["v2_reason"]) or "",
                         "verifier/1": s["v1"], "verifier/1 reason": s["v1_reason"] or ""})
     order = list(range(len(rows)))
     random.Random(20).shuffle(order)
-    OUT.mkdir(exist_ok=True)
+    out.mkdir(exist_ok=True)
     fields = ["id", *rows[0], "annotator label", "misleading", "note"]
-    with open(OUT / "sentences.csv", "w", encoding="utf-8-sig", newline="") as f:
+    with open(out / "sentences.csv", "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for n, i in enumerate(order, start=1):
             writer.writerow({"id": n, **rows[i], "annotator label": "", "misleading": "",
                              "note": ""})
-    with open(OUT / "key.csv", "w", encoding="utf-8-sig", newline="") as f:
+    with open(out / "key.csv", "w", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=["id", *key[0]], lineterminator="\n")
         writer.writeheader()
         for n, i in enumerate(order, start=1):
             writer.writerow({"id": n, **key[i]})
-    print(f"{len(rows)} sentences from {len(data['E-D'])} routes written to {OUT}")
+    print(f"{len(rows)} sentences from {len(data[batch])} routes written to {out}")
 
 
 if __name__ == "__main__":

@@ -3,6 +3,9 @@
 200 sentences that Claude wrote for 50 routes (E-D), in a shuffled order. At least two people
 label every sentence on their own, without talking about it and without opening `key.csv`.
 
+Label [`../E-D2_annotation`](../E-D2_annotation/README.md) first: the paper reports that batch.
+This batch can follow if there is time. The rules below apply to both.
+
 ## What each row shows
 
 The request, the traveler's history (oldest first; the last visit is where the route starts), the

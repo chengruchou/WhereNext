@@ -196,3 +196,7 @@ What follows: one pattern remains, place-level novelty in other words. Reading "
 four, but these routes are now development data as well. Rather than tune again, the remaining
 question, how often the verifier misses or wrongly removes a sentence, is left to the annotators,
 on E-D's 200 sentences and, if they have time, E-D2's 201.
+
+Changed the same day: annotators label E-D2's 201 sentences first. The paper reports that batch,
+verifier/2.2 removes none of E-D's 200, so its precision cannot be measured there, and E-D's routes
+shaped verifier/2.2. E-D's 200 follow if there is time.
