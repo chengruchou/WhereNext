@@ -1,5 +1,9 @@
 # WhereNext: Interactive Semantic-Spatial POI Exploration
 
+![WhereNext main screen: the request "A museum, nothing with coffee" planned as a three-museum drive in Austin, with the first stop's score parts and other options on the left and the road route on the map](docs/main-screen.jpg)
+
+*The main screen. The request "A museum, nothing with coffee" is read into place types and a travel mode, planned as a three-stop drive, and drawn on the map; the first stop shows why it was chosen and the other options.*
+
 WhereNext is a runnable full-stack demo system for interactive Point-of-Interest (POI) exploration.
 A traveler states a request in their own words ("a museum, nothing with coffee"), and a session-based next-POI recommender plans a route around it: places of the requested types within reach decide each stop, and the traveler's habits rank among them. Each stop carries an evidence record whose parts add up to its score; an LLM writes the explanation from that record alone, and a verifier checks every sentence against it and removes the ones it finds unsupported.
 
