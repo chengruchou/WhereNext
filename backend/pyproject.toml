@@ -18,4 +18,7 @@ dependencies = [
     "pydantic>=2.13.3",
     "anthropic>=2.3.0",
     "requests>=2.34.2",
+    "torch>=2.6",
+    "sentence-transformers>=3.0",
+    "scikit-learn>=1.5",
 ]
