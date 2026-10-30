@@ -9,6 +9,7 @@ categories that exist in the POI data.
 
 from __future__ import annotations
 
+import difflib
 import json
 import logging
 import re
@@ -106,6 +107,37 @@ class CategoryVocabulary:
             if hits:
                 scored.append((-hits, len(name), name))
         return [name for _, _, name in sorted(scored)][:MAX_MATCHES_PER_PHRASE]
+
+    def named(self, phrase: str) -> list[str]:
+        """Categories whose whole name appears in the phrase, such as "AT&T" or "H&M",
+        whose words are too short to match one by one."""
+
+        text = phrase.casefold()
+        found = []
+        for name in self.names:
+            key = name.strip().casefold()
+            if re.search(rf"(?<![\w&]){re.escape(key)}(?![\w&])", text):
+                found.append(name)
+        return found
+
+    def corrected(self, phrase: str) -> str:
+        """The phrase with each unknown word replaced by the closest category word, so a
+        typo such as "musuem" still finds "Museum"."""
+
+        known = {word for words in self._words.values() for word in words}
+        words = []
+        for word in content_words(phrase):
+            if not any(words_match(word, other) for other in known):
+                close = difflib.get_close_matches(word, known, n=1, cutoff=0.8)
+                word = close[0] if close else word
+            words.append(word)
+        return " ".join(words)
+
+    def hints(self, phrase: str) -> list[str]:
+        """Categories for a phrase: whole names first, then shared words, then typo fixes."""
+
+        hints = list(dict.fromkeys(self.named(phrase) + self.lexical(phrase)))
+        return hints or self.lexical(self.corrected(phrase))
 
 
 class IntentParser:
@@ -260,39 +292,52 @@ def controls_for(intent: Intent | None, config: RecommendationConfig) -> Steerin
 
 
 def parse_with_keywords(query: str, vocabulary: CategoryVocabulary) -> ParsedIntent:
-    """Offline fallback for English requests: category words, negations, numbers."""
+    """Offline fallback for English requests: category words, negations, numbers.
 
-    text = query.casefold()
+    A part of the request that names no category is passed on as unresolved, so the
+    interface can say what it could not match instead of dropping it silently.
+    """
+
+    text = query.casefold().replace("’", "'")
+    distance = _DISTANCE.search(text)
+    # Travel and distance phrases are not place types ("by subway", "under 1 km").
+    words_only = _CONSTRAINT_PHRASES.sub(" ", text)
     want: list[IntentPhrase] = []
     avoid: list[IntentPhrase] = []
-    for clause in re.split(r"[,.;!?]+|\band\b|\bthen\b", text):
+    for clause in re.split(r"[,.;!?]+|\band\b|\bthen\b", words_only):
         clause = clause.strip()
         if not clause:
             continue
-        negation = r"\b(?:no|not|nothing|avoid|without|except|skip)\s+([^,.;!?]+)"
-        for match in re.finditer(negation, clause):
-            phrase = " ".join(match.group(1).split()[:4])
+        for match in _NEGATION.finditer(clause):
+            rest = match.group(1).split()
             clause = clause.replace(match.group(0), " ")
-            hints = vocabulary.lexical(phrase)
-            if hints:  # "not been there" is not a category to avoid
-                avoid.append(IntentPhrase(phrase=phrase, category_hints=hints))
-        hints = vocabulary.lexical(clause)
+            # "not in the mood for a bar": look past the first words when they name nothing.
+            for phrase in (" ".join(rest[:4]), " ".join(rest[:8])):
+                hints = vocabulary.hints(phrase)
+                if hints:  # "not been there" is not a category to avoid
+                    avoid.append(IntentPhrase(phrase=phrase, category_hints=hints))
+                    break
+        clause = " ".join(clause.split())
+        hints = vocabulary.hints(clause)
         if hints:
-            want.append(IntentPhrase(phrase=" ".join(clause.split()), category_hints=hints))
+            want.append(IntentPhrase(phrase=clause, category_hints=hints))
+        elif content_words(clause) or re.search(r"[^\x00-\x7f]", clause):
+            want.append(IntentPhrase(phrase=clause, category_hints=[]))
 
     travel_mode = None
     max_hop_km = None
-    if re.search(r"\bwalk(?:ing|able)?\b", text):
+    if re.search(r"\b(?:walk(?:ing|able)?|on foot)\b", text):
         travel_mode = "walk"
         if "walking distance" in text:
             max_hop_km = WALKING_DISTANCE_KM
     elif re.search(r"\b(?:drive|driving|car)\b", text):
         travel_mode = "drive"
-    elif re.search(r"\b(?:transit|bus|metro|by train)\b", text):
+    elif re.search(r"\b(?:transit|bus|metro|by train|by subway)\b", text):
         travel_mode = "transit"
-    distance = re.search(r"\bwithin\s+(\d+(?:\.\d+)?)\s*(km|kilomet\w*|miles?|mi)\b", text)
     if distance:
-        max_hop_km = float(distance.group(1)) * (1.609 if distance.group(2).startswith("mi") else 1)
+        value, unit = float(distance.group(1)), distance.group(2)
+        km_per_unit = 1.609 if unit.startswith("mi") else 0.001 if unit[0] == "m" else 1.0
+        max_hop_km = value * km_per_unit
 
     return ParsedIntent(
         want=want,
@@ -346,6 +391,16 @@ def _explore(text: str) -> Literal["familiar", "balanced", "new"] | None:
 
 
 _NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+# Longer triggers first, so "not in the mood for" is not read as "not" + "in the mood".
+_NEGATION = re.compile(
+    r"\b(?:not in the mood for|anything but|don't want|do not want|don't|do not|no|not|"
+    r"nothing|avoid|without|except|skip)\s+([^,.;!?]+)"
+)
+_DISTANCE = re.compile(
+    r"\b(?:within|under|less than)\s+(\d+(?:\.\d+)?)\s*"
+    r"(km|kilomet(?:er|re)s?|miles?|mi|m|met(?:er|re)s?)\b(?:\s+away)?"
+)
+_CONSTRAINT_PHRASES = re.compile(rf"\bon foot\b|\bby subway\b|{_DISTANCE.pattern}")
 
 
 def _num_stops(text: str) -> int | None:
