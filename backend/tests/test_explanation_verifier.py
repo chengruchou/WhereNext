@@ -29,7 +29,8 @@ EVIDENCE = {
             "poi": {"category_name": "Museum", "raw_poi_id": 10, "checkins_count": 412},
             "travel": {"distance_km": 0.11, "mode": "drive"},
             "intent": {"matched_want": ["Museum"], "in_range": 6, "search_radius_km": 40.0},
-            "history": {"history_window": 3, "same_category_visits": 0},
+            "history": {"history_window": 3, "same_category_visits": 0,
+                        "visited_this_poi": False},
         },
         {
             "step": 2, "rank": 1, "pool_size": 5,
@@ -37,7 +38,8 @@ EVIDENCE = {
             "travel": {"distance_km": 0.73, "mode": "drive"},
             "intent": {"matched_want": ["History Museum"], "in_range": 5,
                        "search_radius_km": 40.0},
-            "history": {"history_window": 3, "same_category_visits": 0},
+            "history": {"history_window": 3, "same_category_visits": 0,
+                        "visited_this_poi": False},
         },
     ],
 }
@@ -96,6 +98,63 @@ def test_keeps_true_sentences(text, refs):
 )
 def test_removes_false_sentences(text, refs):
     assert verdict(text, refs) == "unsupported"
+
+
+def test_the_number_of_stops_is_a_fact_of_the_route():
+    text = "This route takes you to two museums you asked for."
+    assert verdict(text, ["steps[0].intent.matched_want"], step=None) == "supported"
+    assert verdict("It visits three museums.", ["steps[0].intent.matched_want"],
+                   step=None) == "unsupported"
+
+
+def test_usual_habits_are_not_a_claim_about_visiting_a_type():
+    text = "A Museum 0.11 km away that fits the way you usually move between places."
+    assert verdict(text, ["steps[0].poi.category_name", "steps[0].travel.distance_km"]) == (
+        "supported")
+    assert verdict("You usually visit Museum places.", ["steps[0].poi.category_name"]) == (
+        "unsupported")
+
+
+ARENAS = {
+    "history": [{"category_name": "Bar", "raw_poi_id": 1}],
+    "intent": {"want": [{"category_name": "Arena", "phrase": "arena"}], "avoid": []},
+    "steps": [
+        {"step": k, "poi": {"category_name": c, "raw_poi_id": 10 + k},
+         "travel": {"distance_km": 1.0}, "intent": {"matched_want": m},
+         "history": {"history_window": 1, "same_category_visits": 0, "visited_this_poi": False}}
+        for k, c, m in ((1, "Arena", ["Arena"]), (2, "Arena", ["Arena"]),
+                        (3, "Convention Center", []))
+    ],
+}
+
+
+def test_counts_of_some_stops():
+    names = ["Convention Center", "Arena", "Bar"]
+
+    def check(text: str) -> str:
+        sentence = ExplanationSentence(text=text, evidence_refs=["steps[0].intent.matched_want"])
+        return verify_sentence(sentence, ARENAS, names, step=None, index=0).verdict
+
+    assert check("Two Arenas you asked for, then a Convention Center.") == "supported"
+    assert check("It starts at an Arena, then follows your habits to two more stops.") == (
+        "supported")
+    assert check("Four Arenas you asked for.") == "unsupported"
+
+
+def test_frequency_words_apply_to_their_own_clause():
+    fits_habit = ("A History Museum 0.73 km away, which fits the order of places you usually "
+                  "visit.")
+    assert verdict(fits_habit, ["steps[1].poi.category_name", "steps[1].travel.distance_km"],
+                   step=2) == "supported"
+    assert verdict("You usually visit History Museum places.",
+                   ["steps[1].poi.category_name"], step=2) == "unsupported"
+
+
+def test_not_been_here_is_about_the_place():
+    text = "A Museum 0.11 km away; you have not been to this place before."
+    refs = ["steps[0].poi.category_name", "steps[0].travel.distance_km",
+            "steps[0].history.visited_this_poi"]
+    assert verdict(text, refs) == "supported"
 
 
 def test_a_type_name_is_not_a_comparison():
