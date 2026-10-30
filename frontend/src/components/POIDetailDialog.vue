@@ -93,7 +93,7 @@
                     <v-icon icon="mdi-map-marker-outline" size="18" color="primary" class="mr-2" />
                   </template>
                   <v-list-item-title class="text-caption font-weight-bold text-capitalize">
-                    {{ key.replace(/_/g, ' ') }}
+                    {{ String(key).replace(/_/g, ' ') }}
                   </v-list-item-title>
                   <v-list-item-subtitle class="text-caption">{{ val }}</v-list-item-subtitle>
                 </v-list-item>
