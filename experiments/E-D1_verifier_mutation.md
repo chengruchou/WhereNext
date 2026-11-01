@@ -130,9 +130,10 @@ Held-out routes (seed 13, 150 routes), share of sentences removed:
 | M13 false "new to you" | 211 | 0.0% | 100.0% | |
 
 Pooled over the 14 kinds of error (5,631 false sentences), verifier/1 removed 38.0% and
-verifier/2 99.96%. Of the 4,392 true sentences other than P6, verifier/1 removed 1,086 (24.7%)
-and verifier/2 none. The development routes (seed 12) gave the same picture: 38.2% and 99.96%
-of false sentences, 0 true sentences removed by verifier/2.
+verifier/2 99.96%. Of the 4,392 true sentences other than P6, verifier/1 removed 1,238 (28.2%)
+and verifier/2 none. (Corrected 2026-11-01: this line said 1,086 and 24.7%; the table above and
+the run's rows give 1,238.) The development routes (seed 12) gave the same picture: 38.2% and
+99.96% of false sentences, 0 true sentences removed by verifier/2.
 
 Against the predictions for verifier/1:
 
@@ -183,3 +184,11 @@ since kept unmet requests within reach, so the sentence counts differ a little. 
 all 14 kinds of error caught in at least 99.6% of sentences (M8 miles 99.6%, the rest 100%), and
 no T, P1 to P5, P7 or P8 sentence removed; P6 (an uncited window) is still removed, as designed.
 The development routes give the same picture.
+
+## Both verifiers on the same sentences (2026-11-01)
+
+The paper's per-kind figure needs verifier/1 and the final verifier on identical sentences, so
+verifier/1 (commit 3889177) and verifier/2.2 were rerun on the held-out routes of today's code;
+verifier/2.2's rows match the saved run exactly. Of 5,630 false sentences, verifier/1 removed
+2,138 (38.0%) and verifier/2.2 5,628 (99.96%). Of 4,386 true sentences other than P6, verifier/1
+removed 1,234 (28.1%) and verifier/2.2 none. The two misses are M8, as before.

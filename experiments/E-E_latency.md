@@ -60,6 +60,10 @@ Against the predictions:
 Not covered yet: reading the request with Claude, writing the explanation with Claude, and
 Google road routes. These call external services and are timed separately with the authors' keys.
 
+Rerun on the code of 2026-11-01, with the CPU idle: a route with a request took p50 112.4 ms and
+p95 129.7 ms, and without one 50.1 and 57.9 ms. The p50s match; the paper keeps the first run's
+higher p95s.
+
 ## External services (run 2026-10-30)
 
 Timed during the E-A2 and E-D batch (`experiments/claude_runs.py --mode batch`), one call at a
