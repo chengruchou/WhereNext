@@ -102,3 +102,17 @@ What this means for the paper and the system:
   distance. Either the planner should keep unmet stops within reach of the stated mode, or the
   interface should say how far the habit stop is.
 - The evidence claim holds: every record's parts add up to its score.
+
+## Rerun after E-G2's reach limit (2026-11-01)
+
+E-G2 kept an unmet request's stops within reach after this run, so E-G was rerun on the same seed
+and cases (10.6 minutes). The paper uses these numbers. Routes that change, first stop / any stop:
+
+| Request | Cases | Firm (lambda 0.8) | New (novelty 0.3) | Familiar (novelty 0) |
+|---|---|---|---|---|
+| R1 next place's type | 500 | 5.4% / 19.8% | 0.0% / 0.8% | 0.2% / 1.2% |
+| R2 group of types | 293 | 10.2% / 35.5% | 1.7% / 9.6% | 0.7% / 9.2% |
+| R3 another type | 499 | 3.8% / 19.2% | 0.0% / 1.6% | 0.0% / 1.0% |
+
+0 of 17,004 stop records differ from the pipeline's score. The conclusions stand. G2's unmet walks
+now match E-G2's: median first leg 0.47 km, 15.3% over 2 km, 3.5% over 10 km.

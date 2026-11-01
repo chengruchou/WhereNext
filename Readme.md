@@ -321,6 +321,7 @@ npm run type-check
 | E-C, E-C2 | Keep only the requested types, or weigh the request against habit? What if the request is not the answer? |
 | E-D1 | Does the verifier remove sentences with planted errors and keep true ones? |
 | E-A1 | How well does the keyword parser read requests with known answers? |
+| E-A3 | How does a sentence encoder compare when it reads the request directly? |
 | E-E | How long does each stage take on a CPU? |
 | E-F | Without a request, do reranking and route costs keep accuracy and reduce repetition? |
 | E-G, E-G2 | Do the wording-derived weights change routes? Where does an unmet request send the traveler? |
