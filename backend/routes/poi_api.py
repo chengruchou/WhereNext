@@ -12,7 +12,6 @@ poi_bp = Blueprint("poi", __name__, url_prefix="/api/poi")
 @poi_bp.route("/id", methods=["POST"])
 def fetch_id():
     rq = request.json
-    print("rq: ", rq)
     poi = POI.query.get(rq.get("id"))
     if poi is None:
         return jsonify(None)
@@ -23,7 +22,6 @@ def fetch_id():
 @poi_bp.route("/cat", methods=["POST"])
 def fetch_cat():
     rq = request.json
-    print("rq: ", rq)
     pois = POI.query.filter(POI.cat_name == rq.get("cat"))
     if pois is None:
         return jsonify(None)

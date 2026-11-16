@@ -200,3 +200,67 @@ on E-D's 200 sentences and, if they have time, E-D2's 201.
 Changed the same day: annotators label E-D2's 201 sentences first. The paper reports that batch,
 verifier/2.2 removes none of E-D's 200, so its precision cannot be measured there, and E-D's routes
 shaped verifier/2.2. E-D's 200 follow if there is time.
+
+## E-D2 annotation, first annotator (2026-11-15)
+
+One author labelled all 201 sentences in the four forms. Nobody else has labelled yet, so there is
+no agreement figure and no agreed reference: the numbers below are against this one set of labels.
+Script: `experiments/ed_score_annotation.py` on the forms' responses workbook. The labels are in
+`E-D2_annotation/labels.csv`, annotators as A1, A2, ...
+
+Labels: 189 supported, 12 unsupported, 0 nothing to check. Of the supported sentences, 46 (24.3%)
+are marked misleading; among the 67 supported sentences with habit wording (a word match on
+"habit", "usual", "pattern" or "routine") it is 42 (62.7%).
+
+| Verifier | Removed | Of those, unsupported (precision) | Of the 12 unsupported, removed (recall) |
+|---|---|---|---|
+| verifier/2.2 | 4 | 0 (0.0%) | 0 (0.0%) |
+| verifier/2.1 | 11 | 0 (0.0%) | 0 (0.0%) |
+| verifier/1 | 25 | 3 (12.0%) | 3 (25.0%) |
+
+The four sentences verifier/2.2 removes are all labelled supported, as in the author's earlier
+reading. It keeps all 12 unsupported sentences (#53, #75, #78, #99, #130, #140, #146, #149, #162,
+#174, #180, #200). Seven are stop sentences that say the stop resembles the traveler's past visits
+("resembles places you have visited", "similar to places you have visited", "much like your past
+Sports & Outdoors visit"). Five are route summaries ("each within a short walk of the last",
+"starting near your last Airport visit", "that suit your habits"). The annotator left no note on
+why each is unsupported, so these are the sentences' words, not the annotator's reasons. None of
+this wording is among verifier/2.2's checks, which cover numbers, place types, visit counts and
+listed words. verifier/1 removes three of the twelve (#146, #149, #200) for another reason: each
+names a place type that its cited values do not mention.
+
+What follows: on the LLM's own sentences, verifier/2.2's precision and recall against these labels
+are both zero, on few cases (4 removals, 12 unsupported sentences). E-D1's planted errors are of
+the kinds it checks; what a reader finds unsupported in real sentences is wording about
+resemblance, nearness and habit, which it does not check. The paper reports this. Still to do: a
+second annotator, agreement, and a reference the annotators agree on.
+
+## E-D2 annotation, second annotator (2026-11-16)
+
+A second annotator (A2) labelled the 104 sentences of forms 1 and 2 (routes 1 to 26) and stopped
+there; the paper was due. The disagreements were not resolved, so there is still no agreed
+reference. `E-D2_annotation/labels.csv` now holds both.
+
+A2's labels on the 104: 90 supported (21 marked misleading), 12 unsupported, 2 nothing to check.
+
+| On the shared 104 | A2 supported | A2 unsupported | A2 nothing to check |
+|---|---|---|---|
+| A1 supported | 88 | 11 | 2 |
+| A1 unsupported | 2 | 1 | 0 |
+
+The two chose the same label for 89 of 104 (85.6%); Cohen's kappa is 0.077. They share one
+unsupported sentence (#99). Within the 104, A1 calls 3 unsupported (#53, #99, #180) and A2 calls 12
+(#2, #4, #9, #49, #76, #99, #119, #123, #165, #185, #188, #190). Nine of A2's twelve say that no
+other requested place lies within 40 km and one says "the only one available in range"; in those
+rows the sheet shows "requested places within 40 km: 0" (or 1) for the stop, so the two annotators
+read that field differently. The misleading flag, on the 88 sentences both call supported: both
+10, only A1 10, only A2 10, neither 58 (kappa 0.35).
+
+Against A2's labels verifier/2.2 removes 2 of the 104, both labelled supported by both annotators,
+and none of A2's twelve. Counting A1's twelve over all 201 and A2's twelve over the 104, 23
+sentences are called unsupported by at least one annotator; verifier/2.2 removes none of them.
+verifier/1 removes 7 of A2's twelve (precision 7/12, recall 7/12), against 3 of A1's twelve.
+
+What follows: with a kappa this low the labels do not support a precision or recall figure, and
+the paper gives none. What holds for both annotators is that neither calls a removed sentence
+unsupported and that verifier/2.2 removes none of the sentences either calls unsupported.
