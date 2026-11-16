@@ -212,7 +212,14 @@ class IntentParser:
                 exc.message,
             )
             return None
-        except (anthropic.AnthropicError, ValidationError) as exc:
+        except ValidationError as exc:
+            # The error text quotes Claude's output, which repeats the visitor's words.
+            fields = sorted({".".join(map(str, error["loc"])) for error in exc.errors()})
+            logger.warning(
+                "Claude's intent failed validation at %s; using the keyword intent parser.", fields
+            )
+            return None
+        except anthropic.AnthropicError as exc:
             logger.warning("Claude intent parsing failed; using the keyword intent parser: %s", exc)
             return None
         if response.stop_reason == "refusal" or response.parsed_output is None:

@@ -1,4 +1,5 @@
 import logging
+import traceback
 
 from flask import Blueprint, jsonify, request
 from services.intent_parser import MAX_QUERY_CHARS, controls_for, get_intent_parser
@@ -30,5 +31,11 @@ def parse():
             }
         )
     except Exception as exc:
-        logger.exception("Intent parsing failed for query=%r", query)
+        # Log where it failed, not the request or the error text, which can quote the request.
+        logger.error(
+            "Intent parsing failed with %s for a request of %d characters\n%s",
+            type(exc).__name__,
+            len(query),
+            "".join(traceback.format_tb(exc.__traceback__)),
+        )
         return jsonify({"error": str(exc)}), 500
