@@ -9,6 +9,8 @@ A traveler states a request in their own words ("a museum, nothing with coffee")
 
 Users can load or edit a POI trajectory, type a request, plan a multi-stop route, inspect each stop's evidence on a Google Map, and read checked, route-level explanations.
 
+A three-minute video of the demo: <https://drive.google.com/file/d/1BeUdgvQhk3JOJzlve7v15FFp2glGBIoo/view>
+
 > This repository contains the runnable demo system.
 > It is not the full offline training or benchmark evaluation repository.
 
@@ -295,7 +297,7 @@ http://localhost:3000/
 
 ## Run the Tests
 
-The backend unit tests cover the explanation verifier, the keyword parser, steering and visit storage. They need no model files or API keys:
+The backend unit tests cover the explanation verifier, the keyword parser, steering, visit storage and that a request never reaches the server log. They need no model files or API keys:
 
 ```bash
 cd backend
@@ -320,7 +322,9 @@ npm run type-check
 | E-B, E-B2 | Within a request, does habit find the place the user actually visited next better than nearest-first or popularity? |
 | E-C, E-C2 | Keep only the requested types, or weigh the request against habit? What if the request is not the answer? |
 | E-D1 | Does the verifier remove sentences with planted errors and keep true ones? |
+| E-D, E-D2 | What does the verifier remove from the sentences Claude writes, and what do annotators say about those sentences? |
 | E-A1 | How well does the keyword parser read requests with known answers? |
+| E-A2 | How well does Claude read the same requests, and phrasings the rules were not written against? |
 | E-A3 | How does a sentence encoder compare when it reads the request directly? |
 | E-E | How long does each stage take on a CPU? |
 | E-F | Without a request, do reranking and route costs keep accuracy and reduce repetition? |
