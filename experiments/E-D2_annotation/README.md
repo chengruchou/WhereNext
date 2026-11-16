@@ -12,6 +12,18 @@ opening `key.csv`.
 Annotators receive `sentences_E-D2.xlsx`, a workbook made from `sentences.csv`. It is not kept in
 the repository.
 
+The labels were collected with four Google Forms built from the same rows instead of the workbook.
+The forms differ from the sheet described in `../E-D_annotation/README.md` in three ways: the
+sentences are grouped by route, one page per route, not shuffled; each sentence has one question
+with four choices (supported, supported but misleading, unsupported, nothing to check) in place of
+a label column and a misleading column; and the page shows the route's lines without the row of
+cited values. Notes are per route.
+
+`experiments/ed_score_annotation.py` scores the forms' responses workbook. `labels.csv` holds the
+labels by sentence id, with annotators as A1, A2, ... in order of their first submission. A1
+labelled all 201 sentences and A2 the 104 of the first two forms; the results are in the last two
+sections of `../E-D_real_explanations.md`.
+
 `sentences.csv` and `key.csv` are written by `experiments/ed_export_annotation.py` from
 `experiments/results/claude_validate_2026-10-30.json`; the shuffle uses seed 20. verifier/2.2's
 verdicts are computed by the script and match those saved in the run; the other two come from the
