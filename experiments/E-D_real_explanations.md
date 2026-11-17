@@ -264,3 +264,60 @@ verifier/1 removes 7 of A2's twelve (precision 7/12, recall 7/12), against 3 of 
 What follows: with a kappa this low the labels do not support a precision or recall figure, and
 the paper gives none. What holds for both annotators is that neither calls a removed sentence
 unsupported and that verifier/2.2 removes none of the sentences either calls unsupported.
+
+## E-D2 annotation, second annotator's last two forms (2026-11-17)
+
+A2 labelled the other 97 sentences (forms 3 and 4), so both annotators have now labelled all 201.
+By the responses' timestamps, A1 submitted the four forms on 2026-11-15, and A2 submitted forms 1
+and 2 later on 2026-11-15 and forms 3 and 4 on 2026-11-17. No earlier label changed. The
+disagreements are still not resolved, so there is no agreed reference. `E-D2_annotation/labels.csv`
+holds all the labels.
+
+A2's last 97 labels came after `labels.csv` (A1's labels and A2's first 104), `key.csv` and the
+section above were public in this repository (2026-11-16). A2 did not know those results when
+labelling, and the forms do not show other annotators' labels. The two halves still differ.
+Thirteen sentences say that no other (or no further) requested place lies within 40 km (a word
+match). A2 calls all 9 of them in the first 104 unsupported, and 1 of the 4 in the last 97; the
+other three A2 marks supported but misleading, the label A1 gives 10 of the 13. So A2 did not label
+this kind of sentence the same way in the two sittings, and agreement with A1 is higher on the last
+97 (second table).
+
+A2's labels on all 201: 181 supported (42 marked misleading, 38 of those with habit wording), 15
+unsupported, 5 nothing to check. On the last 97: 91 supported (21 marked misleading), 3 unsupported
+(#42, #140, #200), 3 nothing to check (#39, #159, #191).
+
+| On all 201 | A2 supported | A2 unsupported | A2 nothing to check |
+|---|---|---|---|
+| A1 supported | 172 | 12 | 5 |
+| A1 unsupported | 9 | 3 | 0 |
+
+| Sentences | Same label | Cohen's kappa | Misleading flag where both say supported (kappa) |
+|---|---|---|---|
+| First 104 | 89 (85.6%) | 0.077 | both 10, only A1 10, only A2 10, neither 58 (0.35) |
+| Last 97 | 86 (88.7%) | 0.223 | both 13, only A1 2, only A2 4, neither 65 (0.77) |
+| All 201 | 175 (87.1%) | 0.131 | both 23, only A1 12, only A2 14, neither 123 (0.54) |
+
+At least one annotator calls 24 sentences unsupported: A1's 12 (listed two sections above) and A2's
+15 (#2, #4, #9, #42, #49, #76, #99, #119, #123, #140, #165, #185, #188, #190, #200), with three in
+common (#99, #140, #200). Ten of A2's fifteen are "within 40 km" sentences. Of the other five, #200
+says no other Gym lies within 2.0 km, #190 says "the only one available in range", #2 and #140 are
+route summaries ("that fit your usual patterns", "that suit your habits"), and #123 says a place
+type not visited before "still fits your usual pattern".
+
+| Verifier | Removed | Of those, A2 unsupported (precision) | Of A2's 15 unsupported, removed (recall) |
+|---|---|---|---|
+| verifier/2.2 | 4 | 0 (0.0%) | 0 (0.0%) |
+| verifier/2.1 | 11 | 1 (9.1%) | 1 (6.7%) |
+| verifier/1 | 25 | 9 (36.0%) | 9 (60.0%) |
+
+Of the four sentences verifier/2.2 removes, A1 labels all four supported, and A2 labels three
+supported and one (#39) nothing to check. verifier/2.2 removes none of the 24. On the 175 sentences
+that both give the same label, 3 are unsupported and verifier/2.2 removes 3 others (precision 0/3,
+recall 0/3).
+
+What follows: both statements at the end of the section above hold on the full set. Neither
+annotator calls a removed sentence unsupported, and verifier/2.2 removes none of the sentences
+either calls unsupported, now 24. With kappa at 0.13 the labels still support no precision or
+recall figure. The paper reports the counts (12 and 15, three in common), the agreement over all
+201 (87.1%, kappa 0.13) and how many supported sentences each marked misleading (46 of 189 and 42
+of 181).
